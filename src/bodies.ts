@@ -91,7 +91,8 @@ void main() {
   col += albedo * 0.01;
   // seen from far away (the overview), light the side facing the camera a little, so planets
   // between us and the Sun read as planets instead of black dots; close up the night stays dark
-  float far = smoothstep(12.0, 30.0, distance(cameraPosition, uCenter) / uRadius);
+  // (small bodies count as Earth-sized, or the Moon would get the fill light even up close)
+  float far = smoothstep(12.0, 30.0, distance(cameraPosition, uCenter) / max(uRadius, 9.0));
   col += albedo * far * 0.45 * max(dot(Ng, V), 0.0);
 
   gl_FragColor = vec4(col, 1.0);

@@ -179,8 +179,8 @@ export const BODIES: BodyInfo[] = [
       'Місяць не світить сам — він відбиває світло Сонця, як дзеркало.',
       'Темні плями на Місяці — це застигла давня лава. Їх називають морями, хоча води там немає.',
     ],
-    radius: size(0.273),
-    orbit: 17.5,
+    radius: size(0.273) / 2, // half the show scale: next to the enlarged Earth it looked too big
+    orbit: 22,
     orbitSeconds: 40,
     spinSeconds: 40, // tidally locked: same as its orbit
     tilt: 6.7,
