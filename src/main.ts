@@ -8,6 +8,7 @@ import { createSky } from './sky';
 import { createUI } from './ui';
 import { loadingManager, useLiteTextures } from './textures';
 import { renderThumbnails } from './thumbnails';
+import { say } from './speech';
 import './style.css';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -139,6 +140,7 @@ function focusOffset(b: Body) {
 }
 
 function flyTo(b: Body | null, duration?: number) {
+  if (b) say(b.info.name);
   ui.setSelected(b ? b.info.id : null); // first, so the panel's size is known for framing
   flight = {
     t: 0,
@@ -258,7 +260,10 @@ const ui = createUI({
   onSelect: (id: BodyId) => {
     const b = byId.get(id)!;
     if (b !== focus || flight) flyTo(b);
-    else ui.showInfo();
+    else {
+      ui.showInfo();
+      say(b.info.name); // tapping the same planet again repeats its name
+    }
   },
   onOverview: () => flyTo(null),
   onTogglePlay: () => {
@@ -283,6 +288,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш') ui.toggleInfo();
   if (e.key === 'l' || e.key === 'L' || e.key === 'д' || e.key === 'Д') ui.toggleLabels();
+  if (e.key === 's' || e.key === 'S' || e.key === 'ы' || e.key === 'Ы') ui.toggleSound();
 });
 
 // ---------- labels ----------

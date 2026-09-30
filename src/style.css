@@ -109,6 +109,7 @@ button {
   padding: 0;
   transition: transform 0.15s ease, background 0.2s ease, opacity 0.2s;
 }
+.icon-btn[hidden] { display: none; }
 .icon-btn svg { width: 24px; height: 24px; }
 .icon-btn svg.solid { fill: currentColor; }
 .icon-btn:active { transform: scale(0.92); }

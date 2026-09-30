@@ -1,4 +1,5 @@
 import { BODIES, EARTH_DIAMETER, type BodyId, type BodyInfo } from './data';
+import { setSpeechEnabled, speechSupported } from './speech';
 
 interface Handlers {
   onSelect: (id: BodyId) => void;
@@ -9,6 +10,8 @@ interface Handlers {
 const EARTH = BODIES.find((b) => b.id === 'earth')!;
 
 const ICONS = {
+  soundOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.5a8 8 0 0 1 0 11"/></svg>',
+  soundOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
   pause: '<svg class="solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>',
   play: '<svg class="solid" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
   system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="6.5" ry="6.5" opacity=".7"/><ellipse cx="12" cy="12" rx="10" ry="10" opacity=".45"/><circle cx="18.5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>',
@@ -70,6 +73,7 @@ export function createUI(h: Handlers) {
   const btnMotion = document.getElementById('btn-motion')!;
   const btnOverview = document.getElementById('btn-overview')!;
   const btnLabels = document.getElementById('btn-labels')!;
+  const btnSound = document.getElementById('btn-sound')!;
   btnOverview.innerHTML = ICONS.system;
   btnLabels.innerHTML = ICONS.labels;
 
@@ -156,6 +160,32 @@ export function createUI(h: Handlers) {
   function toggleLabels() {
     labelsOn = !labelsOn;
     applyLabels();
+
+  // saying planet names aloud: on by default, remembered like the labels
+  let soundOn = true;
+  try {
+    soundOn = localStorage.getItem('planets.sound') !== 'off';
+  } catch {
+    /* storage unavailable: keep the default */
+  }
+  function applySound() {
+    setSpeechEnabled(soundOn);
+    btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
+    btnSound.classList.toggle('active', soundOn);
+    btnSound.setAttribute('aria-pressed', String(soundOn));
+    btnSound.title = soundOn ? 'Не называть планеты вслух (S)' : 'Называть планеты вслух (S)';
+  }
+  function toggleSound() {
+    soundOn = !soundOn;
+    applySound();
+    try {
+      localStorage.setItem('planets.sound', soundOn ? 'on' : 'off');
+    } catch {
+      /* ignore */
+    }
+  }
+  applySound();
+  if (!speechSupported) btnSound.hidden = true;
     try {
       localStorage.setItem('planets.labels', labelsOn ? 'on' : 'off');
     } catch {
@@ -164,9 +194,36 @@ export function createUI(h: Handlers) {
   }
   applyLabels();
 
+  // saying planet names aloud: on by default, remembered like the labels
+  let soundOn = true;
+  try {
+    soundOn = localStorage.getItem('planets.sound') !== 'off';
+  } catch {
+    /* storage unavailable: keep the default */
+  }
+  function applySound() {
+    setSpeechEnabled(soundOn);
+    btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
+    btnSound.classList.toggle('active', soundOn);
+    btnSound.setAttribute('aria-pressed', String(soundOn));
+    btnSound.title = soundOn ? 'Не называть планеты вслух (S)' : 'Называть планеты вслух (S)';
+  }
+  function toggleSound() {
+    soundOn = !soundOn;
+    applySound();
+    try {
+      localStorage.setItem('planets.sound', soundOn ? 'on' : 'off');
+    } catch {
+      /* ignore */
+    }
+  }
+  applySound();
+  if (!speechSupported) btnSound.hidden = true;
+
   btnMotion.addEventListener('click', h.onTogglePlay);
   btnOverview.addEventListener('click', h.onOverview);
   btnLabels.addEventListener('click', toggleLabels);
+  btnSound.addEventListener('click', toggleSound);
 
   return {
     setThumbnails(t: Record<string, string>) {
@@ -205,5 +262,6 @@ export function createUI(h: Handlers) {
       renderInfo();
     },
     toggleLabels,
+    toggleSound,
   };
 }
