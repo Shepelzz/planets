@@ -12,7 +12,8 @@ const ICONS = {
   pause: '<svg class="solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>',
   play: '<svg class="solid" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
   system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="6.5" ry="6.5" opacity=".7"/><ellipse cx="12" cy="12" rx="10" ry="10" opacity=".45"/><circle cx="18.5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>',
-  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor" stroke="none"/></svg>',
+  // a planet with a name tag under it
+  labels: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="7.5" r="4" fill="currentColor" stroke="none"/><rect x="3.5" y="14" width="17" height="7" rx="3.5"/><path d="M7.5 17.5h9"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
 };
 
@@ -69,9 +70,9 @@ export function createUI(h: Handlers) {
   const hint = document.getElementById('hint')!;
   const btnMotion = document.getElementById('btn-motion')!;
   const btnOverview = document.getElementById('btn-overview')!;
-  const btnInfo = document.getElementById('btn-info')!;
+  const btnLabels = document.getElementById('btn-labels')!;
   btnOverview.innerHTML = ICONS.system;
-  btnInfo.innerHTML = ICONS.info;
+  btnLabels.innerHTML = ICONS.labels;
 
   const chips = new Map<BodyId, HTMLButtonElement>();
   for (const b of BODIES) {
@@ -128,7 +129,6 @@ export function createUI(h: Handlers) {
     info.querySelector('.close')!.addEventListener('click', () => {
       infoWanted = false;
       renderInfo();
-      syncInfoBtn();
     });
     info.querySelector('.next-fact')!.addEventListener('click', () => {
       factIndex++;
@@ -141,18 +141,33 @@ export function createUI(h: Handlers) {
     });
   }
 
-  function syncInfoBtn() {
-    btnInfo.classList.toggle('active', !!current && infoWanted);
-    btnInfo.toggleAttribute('disabled', !current);
+  // planet name labels in the 3D view; the choice survives a reload
+  let labelsOn = true;
+  try {
+    labelsOn = localStorage.getItem('planets.labels') !== 'off';
+  } catch {
+    /* storage unavailable (private mode): keep the default */
   }
+  function applyLabels() {
+    document.body.classList.toggle('no-labels', !labelsOn);
+    btnLabels.classList.toggle('active', labelsOn);
+    btnLabels.setAttribute('aria-pressed', String(labelsOn));
+    btnLabels.title = labelsOn ? 'Спрятать подписи планет (L)' : 'Показать подписи планет (L)';
+  }
+  function toggleLabels() {
+    labelsOn = !labelsOn;
+    applyLabels();
+    try {
+      localStorage.setItem('planets.labels', labelsOn ? 'on' : 'off');
+    } catch {
+      /* ignore */
+    }
+  }
+  applyLabels();
 
   btnMotion.addEventListener('click', h.onTogglePlay);
   btnOverview.addEventListener('click', h.onOverview);
-  btnInfo.addEventListener('click', () => {
-    infoWanted = !infoWanted;
-    renderInfo();
-    syncInfoBtn();
-  });
+  btnLabels.addEventListener('click', toggleLabels);
 
   return {
     setThumbnails(t: Record<string, string>) {
@@ -173,7 +188,6 @@ export function createUI(h: Handlers) {
       current = next;
       document.body.classList.toggle('has-focus', !!current);
       renderInfo();
-      syncInfoBtn();
     },
     setPlaying(p: boolean) {
       btnMotion.innerHTML = p ? ICONS.pause : ICONS.play;
@@ -184,7 +198,13 @@ export function createUI(h: Handlers) {
       if (!current) return;
       infoWanted = !infoWanted;
       renderInfo();
-      syncInfoBtn();
     },
+    /** Reopen the story card after it was closed (tapping the selected planet again). */
+    showInfo() {
+      if (!current || infoWanted) return;
+      infoWanted = true;
+      renderInfo();
+    },
+    toggleLabels,
   };
 }

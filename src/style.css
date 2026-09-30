@@ -207,6 +207,7 @@ button {
   white-space: nowrap;
 }
 .label.show { opacity: 1; pointer-events: auto; }
+body.no-labels #labels { display: none; }
 
 /* ---------- hint ---------- */
 #hint {

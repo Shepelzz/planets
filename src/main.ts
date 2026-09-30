@@ -258,6 +258,7 @@ const ui = createUI({
   onSelect: (id: BodyId) => {
     const b = byId.get(id)!;
     if (b !== focus || flight) flyTo(b);
+    else ui.showInfo();
   },
   onOverview: () => flyTo(null),
   onTogglePlay: () => {
@@ -281,6 +282,7 @@ window.addEventListener('keydown', (e) => {
     flyTo(bodies[next < 0 ? n - 1 : next]);
   }
   if (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш') ui.toggleInfo();
+  if (e.key === 'l' || e.key === 'L' || e.key === 'д' || e.key === 'Д') ui.toggleLabels();
 });
 
 // ---------- labels ----------
