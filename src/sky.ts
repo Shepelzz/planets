@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { loadTexture } from './textures';
+import { loadTexture, SRGB_GLSL } from './textures';
 
 // Galactic plane orientation (arbitrary but fixed) and the direction of the galactic core.
 const GAL_N = new THREE.Vector3(0.35, 0.86, 0.37).normalize();
@@ -96,13 +96,25 @@ export function createSky(): { group: THREE.Group; setPixelRatio: (r: number) =>
   stars.frustumCulled = false;
 
   // ---- Milky Way panorama (real all-sky map), dimmed so it stays a backdrop ----
-  const skyMat = new THREE.MeshBasicMaterial({
-    map: loadTexture('milky_way.jpg'),
-    color: new THREE.Color(0.55, 0.55, 0.6),
+  const skyMat = new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: loadTexture('milky_way.jpg') } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uMap;
+      varying vec2 vUv;
+      ${SRGB_GLSL}
+      void main() {
+        gl_FragColor = vec4(srgbToLinear(texture2D(uMap, vUv).rgb) * 0.55, 1.0);
+        #include <colorspace_fragment>
+      }`,
     side: THREE.BackSide,
     depthWrite: false,
     depthTest: false,
-    toneMapped: false,
   });
   const skySphere = new THREE.Mesh(new THREE.SphereGeometry(R, 96, 64), skyMat);
   // tilt the galactic plane so the band crosses the sky diagonally

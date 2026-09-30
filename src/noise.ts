@@ -105,6 +105,21 @@ float craterLayer(vec3 p, float density) {
   return h;
 }
 
+// Saturn-style ring optical density as a function of radius (in planet radii).
+float ringDensity(float r) {
+  float d = 0.0;
+  d += (0.10 + 0.12 * smoothstep(1.24, 1.52, r)) * smoothstep(1.23, 1.25, r) * (1.0 - smoothstep(1.51, 1.53, r)); // C ring
+  d += (0.62 + 0.3 * smoothstep(1.53, 1.78, r)) * smoothstep(1.52, 1.54, r) * (1.0 - smoothstep(1.94, 1.96, r)); // B ring
+  d += 0.06 * smoothstep(1.95, 1.96, r) * (1.0 - smoothstep(2.02, 2.03, r)); // Cassini division
+  d += 0.55 * smoothstep(2.02, 2.035, r) * (1.0 - smoothstep(2.26, 2.275, r)); // A ring
+  d *= 1.0 - 0.9 * (1.0 - smoothstep(0.0, 0.006, abs(r - 2.215))); // Encke gap
+  float fine = 0.72 + 0.14 * sin(r * 230.0) + 0.09 * sin(r * 611.0 + 1.3) + 0.05 * sin(r * 1450.0 + 0.4);
+  return clamp(d * fine, 0.0, 1.0);
+}
+`;
+
+// Needs OES_standard_derivatives on WebGL 1, so only shaders that enable it include this.
+export const BUMP_GLSL = /* glsl */ `
 // Bump mapping from screen-space derivatives of a scalar height (no tangents needed).
 vec3 perturbNormal(vec3 pos, vec3 n, float h, float scale) {
   vec3 dpdx = dFdx(pos);
@@ -117,17 +132,5 @@ vec3 perturbNormal(vec3 pos, vec3 n, float h, float scale) {
   if (abs(det) < 1e-12) return n;
   vec3 grad = sign(det) * (dhdx * r1 + dhdy * r2);
   return normalize(abs(det) * n - grad);
-}
-
-// Saturn-style ring optical density as a function of radius (in planet radii).
-float ringDensity(float r) {
-  float d = 0.0;
-  d += (0.10 + 0.12 * smoothstep(1.24, 1.52, r)) * smoothstep(1.23, 1.25, r) * (1.0 - smoothstep(1.51, 1.53, r)); // C ring
-  d += (0.62 + 0.3 * smoothstep(1.53, 1.78, r)) * smoothstep(1.52, 1.54, r) * (1.0 - smoothstep(1.94, 1.96, r)); // B ring
-  d += 0.06 * smoothstep(1.95, 1.96, r) * (1.0 - smoothstep(2.02, 2.03, r)); // Cassini division
-  d += 0.55 * smoothstep(2.02, 2.035, r) * (1.0 - smoothstep(2.26, 2.275, r)); // A ring
-  d *= 1.0 - 0.9 * (1.0 - smoothstep(0.0, 0.006, abs(r - 2.215))); // Encke gap
-  float fine = 0.72 + 0.14 * sin(r * 230.0) + 0.09 * sin(r * 611.0 + 1.3) + 0.05 * sin(r * 1450.0 + 0.4);
-  return clamp(d * fine, 0.0, 1.0);
 }
 `;

@@ -1,15 +1,27 @@
+// Pointer Events polyfill for Safari < 13 (iOS 12 iPads); a no-op where they're native.
+import 'pepjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createBodies, createOrbitLines, updateBodies, type Body } from './bodies';
 import type { BodyId } from './data';
 import { createSky } from './sky';
 import { createUI } from './ui';
-import { loadingManager } from './textures';
+import { loadingManager, useLiteTextures } from './textures';
 import { renderThumbnails } from './thumbnails';
 import './style.css';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// `?webgl1` forces the WebGL 1 path (how old iPads on iOS 12 run) for testing on a modern browser
+const forceWebGL1 = new URLSearchParams(location.search).has('webgl1');
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  powerPreference: 'high-performance',
+  context: forceWebGL1 ? (canvas.getContext('webgl', { antialias: true }) as WebGLRenderingContext) : undefined,
+});
+// WebGL 1 means an old device (iOS 12 iPads have 1 GB RAM): smaller maps and fewer pixels
+const lowEnd = !renderer.capabilities.isWebGL2;
+useLiteTextures(lowEnd);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.setClearColor(0x000000);
@@ -50,7 +62,7 @@ controls.zoomSpeed = 0.9;
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const pr = Math.min(window.devicePixelRatio || 1, 2);
+  const pr = Math.min(window.devicePixelRatio || 1, lowEnd ? 1.5 : 2);
   renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
@@ -324,12 +336,12 @@ ui.setSelected(null);
 (window as unknown as { space: unknown }).space = { renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d) };
 
 // ---------- loop ----------
-const timer = new THREE.Timer();
+let lastNow = performance.now();
 let simTime = 0;
 let loaded = false;
 function frame(now: number) {
-  timer.update(now);
-  const rawDt = timer.getDelta();
+  const rawDt = Math.max(0, (now - lastNow) / 1000);
+  lastNow = now;
   const dt = Math.min(rawDt, 0.1);
   if (playing) simTime += dt;
   updateBodies(bodies, playing ? dt : 0, simTime, lines);

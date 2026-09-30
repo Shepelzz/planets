@@ -39,7 +39,10 @@ button {
 
 #scene {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   display: block;
@@ -71,7 +74,6 @@ button {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
   padding: 10px 16px 10px 12px;
   border-radius: 999px;
   background: var(--glass);
@@ -83,6 +85,7 @@ button {
   letter-spacing: 0.01em;
 }
 .brand-dot {
+  margin-right: 10px;
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -90,7 +93,8 @@ button {
   box-shadow: 0 0 14px rgba(255, 190, 90, 0.8);
 }
 
-.actions { display: flex; gap: 10px; }
+.actions { display: flex; }
+.actions > * + * { margin-left: 10px; }
 
 .icon-btn {
   width: 52px;
@@ -122,7 +126,6 @@ button {
   transform: translateX(-50%);
   max-width: calc(100vw - 24px - var(--safe-l) - var(--safe-r));
   display: flex;
-  gap: 4px;
   padding: 8px;
   border-radius: 28px;
   background: var(--glass);
@@ -146,7 +149,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  margin-right: 4px;
   scroll-snap-align: center;
   transition: background 0.2s ease, transform 0.15s ease;
 }
@@ -175,7 +178,9 @@ button {
   border: 3px solid rgba(226, 204, 158, 0.9);
   transform: rotate(-18deg);
 }
+.chip:last-child { margin-right: 0; }
 .chip-name {
+  margin-top: 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
@@ -184,7 +189,7 @@ button {
 .chip.selected .chip-name { color: var(--text); }
 
 /* ---------- labels over the scene ---------- */
-#labels { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+#labels { position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: 2; }
 .label {
   position: absolute;
   left: 0;
@@ -269,7 +274,8 @@ button {
 }
 #info .close svg { width: 18px; height: 18px; }
 
-.info-head { display: flex; align-items: center; gap: 14px; padding-right: 40px; }
+.info-head { display: flex; align-items: center; padding-right: 40px; }
+.info-head > * + * { margin-left: 14px; }
 .info-ball {
   flex: 0 0 auto;
   width: 54px;
@@ -284,6 +290,7 @@ button {
   margin: 18px 0 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-gap: 8px;
   gap: 8px;
 }
 .stats > div {
@@ -300,8 +307,10 @@ button {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
 }
-.compare-pics { display: flex; align-items: flex-end; justify-content: center; gap: 28px; min-height: 90px; }
-.compare-item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.compare-pics { display: flex; align-items: flex-end; justify-content: center; min-height: 90px; }
+.compare-pics > * + * { margin-left: 28px; }
+.compare-item { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: var(--muted); font-weight: 600; }
+.compare-item span { margin-top: 6px; }
 .ball { border-radius: 50%; box-shadow: inset -6px -5px 10px rgba(0, 0, 0, 0.5); }
 .compare-caption { text-align: center; margin-top: 8px; font-size: 14px; font-weight: 600; }
 
@@ -317,7 +326,8 @@ button {
 .fact-text.pop { animation: pop 0.35s ease; }
 @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
 .fact-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
-.dots { display: flex; gap: 5px; }
+.dots { display: flex; }
+.dots i + i { margin-left: 5px; }
 .dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
 .dots i.on { background: var(--accent); }
 .next-fact {
@@ -351,6 +361,7 @@ button {
   .info-body {
     display: grid;
     grid-template-columns: 1.25fr 1fr;
+    grid-gap: 12px;
     gap: 12px;
     align-items: start;
   }
@@ -371,20 +382,23 @@ button {
 
 @media (max-height: 560px) and (orientation: landscape) {
   :root { --dock-h: 80px; }
-  .chip { padding: 5px 2px; gap: 3px; }
+  .chip { padding: 5px 2px; }
+  .chip-name { margin-top: 3px; }
   .chip-ball { width: 34px; height: 34px; }
 }
 
 /* ---------- loader ---------- */
 #loader {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
   background: radial-gradient(circle at 50% 45%, #10152a, #000 70%);
   font-size: 20px;
   font-weight: 700;
@@ -397,6 +411,7 @@ button {
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #bfe3ff, #3b86d6 40%, #2d6b3a 70%, #0d2a4a);
   box-shadow: inset -10px -8px 16px rgba(0, 0, 0, 0.6), 0 0 30px rgba(80, 140, 255, 0.35);
+  margin-bottom: 18px;
   animation: bob 1.4s ease-in-out infinite;
 }
 @keyframes bob { 50% { transform: translateY(-10px); } }

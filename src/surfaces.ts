@@ -10,7 +10,7 @@ const TEXTURED = /* glsl */ `
 uniform sampler2D uMap;
 vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
   spec = 0.0; night = vec3(0.0);
-  vec3 c = texture2D(uMap, uv).rgb;
+  vec3 c = srgbToLinear(texture2D(uMap, uv).rgb);
   h = dot(c, vec3(0.299, 0.587, 0.114));
   return c;
 }`;
@@ -19,13 +19,13 @@ const EARTH = /* glsl */ `
 uniform sampler2D uMap;
 uniform sampler2D uNight;
 vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
-  vec3 c = texture2D(uMap, uv).rgb;
+  vec3 c = srgbToLinear(texture2D(uMap, uv).rgb);
   float lum = dot(c, vec3(0.299, 0.587, 0.114));
   // oceans are the dark, blue-dominant pixels of the day map
   float ocean = smoothstep(0.004, 0.03, c.b - c.r) * (1.0 - smoothstep(0.06, 0.16, lum));
   spec = ocean;
   h = (1.0 - ocean) * lum;
-  vec3 n = texture2D(uNight, uv).rgb;
+  vec3 n = srgbToLinear(texture2D(uNight, uv).rgb);
   night = max(n - 0.01, 0.0) * 3.2 * (1.0 - ocean);
   return c;
 }`;

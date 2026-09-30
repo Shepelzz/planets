@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { BODIES, type BodyInfo } from './data';
-import { NOISE_GLSL } from './noise';
+import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
-import { loadTexture } from './textures';
+import { loadTexture, SRGB_GLSL } from './textures';
 
 const DEG = Math.PI / 180;
 
@@ -50,6 +50,8 @@ varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec2 vUv;
 ${NOISE_GLSL}
+${BUMP_GLSL}
+${SRGB_GLSL}
 ${surface}
 
 float ringShadow(vec3 pos, vec3 L) {
@@ -156,6 +158,7 @@ uniform vec3 uRingNormal;
 uniform sampler2D uRingTex;
 varying vec3 vLocal;
 varying vec3 vWorldPos;
+${SRGB_GLSL}
 void main() {
   float r = length(vLocal.xy);
   float t = (r - 1.24) / (2.27 - 1.24);
@@ -172,7 +175,7 @@ void main() {
   float shadow = b < 0.0 ? smoothstep(uRadius * 0.97, uRadius * 1.03, closest) : 1.0;
   float sameSide = sign(dot(uRingNormal, L)) * sign(dot(uRingNormal, V));
   float lit = sameSide > 0.0 ? 1.0 : 0.35 * (1.0 - dens * 0.6);
-  vec3 col = ring.rgb * 2.3 * lit * shadow * (0.6 + 0.4 * abs(dot(uRingNormal, L)) + 0.3);
+  vec3 col = srgbToLinear(ring.rgb) * 2.3 * lit * shadow * (0.6 + 0.4 * abs(dot(uRingNormal, L)) + 0.3);
   gl_FragColor = vec4(col, dens * 0.95);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -186,6 +189,7 @@ varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec2 vUv;
 ${NOISE_GLSL}
+${SRGB_GLSL}
 void main() {
   vec3 p = normalize(vObjPos);
   float t = uTime * 0.04;
@@ -194,7 +198,7 @@ void main() {
   vec3 V = normalize(cameraPosition - vWorldPos);
   float mu = max(dot(normalize(vWorldNormal), V), 0.0);
   float limb = 0.3 + 0.7 * pow(mu, 0.55);
-  vec3 col = texture2D(uMap, vUv).rgb * (1.7 + 0.35 * gran);
+  vec3 col = srgbToLinear(texture2D(uMap, vUv).rgb) * (1.7 + 0.35 * gran);
   col = mix(col, vec3(1.0, 0.9, 0.62), pow(mu, 3.0) * 0.3);
   col = mix(vec3(0.85, 0.14, 0.0), col, limb);
   gl_FragColor = vec4(min(col * (0.45 + 0.7 * limb), vec3(1.0)), 1.0);
@@ -272,6 +276,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     vertexShader: VERT,
     fragmentShader: PLANET_FRAG(SURFACES[info.surface!]),
     uniforms,
+    extensions: { derivatives: true }, // dFdx/dFdy for bump mapping on WebGL 1
   });
   materials.push(mat);
   const mesh = new THREE.Mesh(sphereGeo, mat);
@@ -283,7 +288,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     const cm = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: CLOUD_FRAG,
-      uniforms: { uSunPos: uniforms.uSunPos, uClouds: { value: loadTexture('earth_clouds.jpg', false) } },
+      uniforms: { uSunPos: uniforms.uSunPos, uClouds: { value: loadTexture('earth_clouds.jpg') } },
       transparent: true,
       depthWrite: false,
     });
