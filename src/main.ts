@@ -14,15 +14,18 @@ import './style.css';
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 // `?webgl1` forces the WebGL 1 path (how old iPads on iOS 12 run) for testing on a modern browser
 const forceWebGL1 = new URLSearchParams(location.search).has('webgl1');
+// No WebGL 2 means an old device (iOS 12 iPads: A7/A8 GPU, 1 GB RAM). Decided before creating the
+// context because MSAA can't be switched off later: light mode = 2K maps, fewer triangles, no MSAA,
+// fewer pixels, no blur behind the panels.
+const lowEnd = forceWebGL1 || !document.createElement('canvas').getContext('webgl2');
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  antialias: !lowEnd,
   powerPreference: 'high-performance',
-  context: forceWebGL1 ? (canvas.getContext('webgl', { antialias: true }) as WebGLRenderingContext) : undefined,
+  context: forceWebGL1 ? (canvas.getContext('webgl', { antialias: false }) as WebGLRenderingContext) : undefined,
 });
-// WebGL 1 means an old device (iOS 12 iPads have 1 GB RAM): smaller maps and fewer pixels
-const lowEnd = !renderer.capabilities.isWebGL2;
 useLiteTextures(lowEnd);
+document.body.classList.toggle('low-end', lowEnd);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.setClearColor(0x000000);
@@ -47,7 +50,7 @@ loadingManager.onError = (url) => console.warn('texture failed to load', url);
 const sky = createSky();
 scene.add(sky.group);
 
-const bodies = createBodies(scene);
+const bodies = createBodies(scene, lowEnd);
 const lines = createOrbitLines(scene, bodies);
 const byId = new Map(bodies.map((b) => [b.info.id, b]));
 const sunBody = byId.get('sun')!;
@@ -60,10 +63,14 @@ controls.rotateSpeed = 0.6;
 controls.zoomSpeed = 0.9;
 
 // ---------- sizing ----------
+// Pixel ratio starts at a sensible level and is lowered automatically if frames are slow (see frame()).
+const maxPixelRatio = Math.min(window.devicePixelRatio || 1, lowEnd ? 1.25 : 2);
+const minPixelRatio = lowEnd ? 0.75 : 1;
+let pixelRatio = maxPixelRatio;
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const pr = Math.min(window.devicePixelRatio || 1, lowEnd ? 1.5 : 2);
+  const pr = pixelRatio;
   renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
@@ -341,15 +348,34 @@ flyTo(null);
 ui.setSelected(null);
 
 // debug handle
-(window as unknown as { space: unknown }).space = { renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d) };
+(window as unknown as { space: unknown }).space = { lowEnd, getPixelRatio: () => pixelRatio, renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d) };
 
 // ---------- loop ----------
 let lastNow = performance.now();
+// adaptive resolution: two slow seconds in a row → render fewer pixels (never goes back up)
+let fpsFrames = 0;
+let fpsWindowStart = performance.now();
+let slowSeconds = 0;
+function adaptResolution(now: number) {
+  fpsFrames++;
+  if (now - fpsWindowStart < 1000) return;
+  const fps = (fpsFrames * 1000) / (now - fpsWindowStart);
+  fpsFrames = 0;
+  fpsWindowStart = now;
+  if (!loaded || document.visibilityState !== 'visible') return;
+  slowSeconds = fps < 40 ? slowSeconds + 1 : 0;
+  if (slowSeconds >= 2 && pixelRatio > minPixelRatio) {
+    pixelRatio = Math.max(minPixelRatio, pixelRatio - 0.25);
+    slowSeconds = 0;
+    resize();
+  }
+}
 let simTime = 0;
 let loaded = false;
 function frame(now: number) {
   const rawDt = Math.max(0, (now - lastNow) / 1000);
   lastNow = now;
+  adaptResolution(now);
   const dt = Math.min(rawDt, 0.1);
   if (playing) simTime += dt;
   updateBodies(bodies, playing ? dt : 0, simTime, lines);

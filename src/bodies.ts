@@ -21,7 +21,9 @@ export interface Body {
   materials: THREE.ShaderMaterial[];
 }
 
-const sphereGeo = new THREE.SphereGeometry(1, 160, 120);
+// set in createBodies: old devices get far fewer triangles (the maps carry the detail anyway)
+let sphereGeo: THREE.SphereGeometry;
+let lowDetail = false;
 
 const VERT = /* glsl */ `
 varying vec3 vObjPos;
@@ -183,6 +185,7 @@ void main() {
 
 const SUN_FRAG = /* glsl */ `
 uniform float uTime;
+uniform float uDetail;
 uniform sampler2D uMap;
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
@@ -194,7 +197,7 @@ void main() {
   vec3 p = normalize(vObjPos);
   float t = uTime * 0.04;
   // the real map plus a slowly boiling granulation on top
-  float gran = fbm(p * 30.0 + vec3(t, -t, t * 0.7), 3);
+  float gran = uDetail > 0.5 ? fbm(p * 30.0 + vec3(t, -t, t * 0.7), 3) : 0.0;
   vec3 V = normalize(cameraPosition - vWorldPos);
   float mu = max(dot(normalize(vWorldNormal), V), 0.0);
   float limb = 0.3 + 0.7 * pow(mu, 0.55);
@@ -228,7 +231,7 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   const mat = new THREE.ShaderMaterial({
     vertexShader: VERT,
     fragmentShader: SUN_FRAG,
-    uniforms: { uTime: { value: 0 }, uMap: { value: loadTexture(TEXTURE_FILES.sun) } },
+    uniforms: { uTime: { value: 0 }, uDetail: { value: lowDetail ? 0 : 1 }, uMap: { value: loadTexture(TEXTURE_FILES.sun) } },
     toneMapped: false, // keep the Sun's colours saturated instead of ACES-washed white
   });
   const mesh = new THREE.Mesh(sphereGeo, mat);
@@ -352,7 +355,9 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
   return { info, anchor, tilt, mesh, clouds, viewRadius, orbitAngle: info.startAngle, spinAngle: 0, materials };
 }
 
-export function createBodies(scene: THREE.Scene): Body[] {
+export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
+  lowDetail = lowEnd;
+  sphereGeo = lowEnd ? new THREE.SphereGeometry(1, 72, 48) : new THREE.SphereGeometry(1, 160, 120);
   return BODIES.map((info) => (info.id === 'sun' ? makeSun(info, scene) : makePlanet(info, scene)));
 }
 

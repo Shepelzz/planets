@@ -434,3 +434,13 @@ h1.talk.speaking, .fact-text.talk.speaking { box-shadow: none; color: var(--acce
 /* real rendered thumbnails already carry their own lighting */
 .chip-ball.textured, .info-ball.textured, .ball.textured { box-shadow: none; }
 .chip.star .chip-ball.textured { box-shadow: 0 0 18px rgba(255, 170, 60, 0.75); }
+
+/* old devices: blurring the moving 3D scene behind every panel each frame is too expensive */
+body.low-end {
+  --glass: rgba(14, 18, 32, 0.88);
+  --glass-strong: rgba(12, 16, 28, 0.95);
+}
+body.low-end * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
