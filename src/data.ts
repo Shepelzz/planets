@@ -39,8 +39,8 @@ export interface BodyInfo {
 const YEAR = 150;
 
 // Show sizes, not real ones: real proportions leave tiny dots around a huge Sun. The power < 1
-// squeezes the range while keeping the order (Jupiter > Saturn > … > Mercury); Earth = 3.3.
-const size = (earthDiameters: number) => 3.3 * Math.pow(earthDiameters, 0.45);
+// squeezes the range while keeping the order (Jupiter > Saturn > … > Mercury); Earth ≈ 9.9.
+const size = (earthDiameters: number) => 9.9 * Math.pow(earthDiameters, 0.45);
 
 export const BODIES: BodyInfo[] = [
   {
@@ -63,7 +63,7 @@ export const BODIES: BodyInfo[] = [
       'Усі планети кружляють навколо Сонця, наче на каруселі.',
       'Ніколи не дивись на справжнє Сонце — це небезпечно для очей!',
     ],
-    radius: 36, // bigger than the formula (27): the Sun should dominate the overview
+    radius: 54, // not from the formula: big enough to stay clearly the largest
     orbit: 0,
     orbitSeconds: 0,
     spinSeconds: 400,
@@ -91,7 +91,7 @@ export const BODIES: BodyInfo[] = [
       'Меркурій — найшвидша планета, він мчить навколо Сонця швидше за всіх.',
     ],
     radius: size(0.383),
-    orbit: 58,
+    orbit: 70,
     orbitSeconds: YEAR * 0.241,
     spinSeconds: 90,
     tilt: 0,
@@ -119,7 +119,7 @@ export const BODIES: BodyInfo[] = [
       'За розміром Венера майже як Земля — тому їх називають планетами-сестрами.',
     ],
     radius: size(0.949),
-    orbit: 74,
+    orbit: 91,
     orbitSeconds: YEAR * 0.615,
     spinSeconds: 300, // tilt 177° already makes it spin backwards
     tilt: 177,
@@ -149,7 +149,7 @@ export const BODIES: BodyInfo[] = [
       'Уночі з космосу видно вогники міст.',
     ],
     radius: size(1),
-    orbit: 92,
+    orbit: 129,
     orbitSeconds: YEAR,
     spinSeconds: 60,
     tilt: 23.4,
@@ -180,7 +180,7 @@ export const BODIES: BodyInfo[] = [
       'Темні плями на Місяці — це застигла давня лава. Їх називають морями, хоча води там немає.',
     ],
     radius: size(0.273),
-    orbit: 7.5,
+    orbit: 17.5,
     orbitSeconds: 40,
     spinSeconds: 40, // tidally locked: same as its orbit
     tilt: 6.7,
@@ -210,7 +210,7 @@ export const BODIES: BodyInfo[] = [
       'Доба на Марсі майже така сама, як на Землі, — лише на 37 хвилин довша.',
     ],
     radius: size(0.532),
-    orbit: 110,
+    orbit: 164,
     orbitSeconds: YEAR * 1.881,
     spinSeconds: 62,
     tilt: 25.2,
@@ -240,7 +240,7 @@ export const BODIES: BodyInfo[] = [
       'У Юпітера теж є кільця, тільки дуже тонкі й темні — їх майже не видно.',
     ],
     radius: size(10.97),
-    orbit: 145,
+    orbit: 207,
     orbitSeconds: YEAR * 11.86,
     spinSeconds: 26,
     tilt: 3.1,
@@ -270,7 +270,7 @@ export const BODIES: BodyInfo[] = [
       'На найбільшому супутнику Сатурна, Титані, є озера — тільки не з води, а з рідкого газу.',
     ],
     radius: size(9.14),
-    orbit: 190,
+    orbit: 304,
     orbitSeconds: YEAR * 29.45,
     spinSeconds: 28,
     tilt: 26.7,
@@ -301,7 +301,7 @@ export const BODIES: BodyInfo[] = [
       'Супутники Урана назвали на честь героїв казок і п’єс: Титанія, Оберон, Міранда.',
     ],
     radius: size(3.98),
-    orbit: 232,
+    orbit: 390,
     orbitSeconds: YEAR * 84,
     spinSeconds: 40, // tilt 98° already makes it retrograde
     tilt: 97.8,
@@ -330,7 +330,7 @@ export const BODIES: BodyInfo[] = [
       'Світлу Сонця потрібно понад 4 години, щоб долетіти до Нептуна.',
     ],
     radius: size(3.86),
-    orbit: 260,
+    orbit: 433,
     orbitSeconds: YEAR * 164.8,
     spinSeconds: 38,
     tilt: 28.3,

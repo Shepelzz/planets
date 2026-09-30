@@ -96,7 +96,7 @@ interface Flight {
 }
 let flight: Flight | null = null;
 
-const OVERVIEW_OFFSET = new THREE.Vector3(0, 205, 370);
+const OVERVIEW_OFFSET = new THREE.Vector3(0, 308, 555);
 
 /** Screen area not covered by the top bar, dock and info panel. */
 function freeArea() {
@@ -194,8 +194,8 @@ function configureLimits() {
     controls.minDistance = r * (focus.info.id === 'sun' ? 1.6 : 1.25);
     controls.maxDistance = Math.max(fitDistance(focus.viewRadius) * 6, r * 20);
   } else {
-    controls.minDistance = 85; // stay outside the Sun
-    controls.maxDistance = 1500;
+    controls.minDistance = 120; // stay outside the Sun
+    controls.maxDistance = 2200;
   }
 }
 
@@ -333,7 +333,7 @@ function updateLabels() {
   for (const b of bodies) {
     const el = labels.get(b.info.id)!;
     const s = screenInfo(b);
-    let show = !s.behind && s.pxRadius < 28 && b !== focus && !flight && !occluded(b);
+    let show = !s.behind && s.pxRadius < 90 && b !== focus && !flight && !occluded(b);
     if (b.info.id === 'moon' && Math.hypot(s.x - earth.x, s.y - earth.y) < 40) show = false;
     el.classList.toggle('show', show);
     if (show) el.style.transform = `translate(-50%, 0) translate(${s.x.toFixed(1)}px, ${(s.y + s.pxRadius + 8).toFixed(1)}px)`;
@@ -389,7 +389,7 @@ function frame(now: number) {
   sky.group.position.copy(camera.position);
   // the wide halo looks like fog up close, so fade it in with distance
   const halo = sunBody.anchor.userData.halo as THREE.Sprite;
-  halo.material.opacity = THREE.MathUtils.smoothstep(camera.position.length(), 60, 260);
+  halo.material.opacity = THREE.MathUtils.smoothstep(camera.position.length(), 150, 450);
   updateLabels();
   renderer.render(scene, camera);
   if (!loaded && texturesReady) {
