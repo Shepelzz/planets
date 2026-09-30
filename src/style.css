@@ -104,13 +104,14 @@ button {
   background: var(--glass);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
-  display: grid;
-  place-items: center;
+  /* no grid/flex here: old Safari can't lay out a <button> that way; the svg centres itself */
+  line-height: 0;
+  text-align: center;
   padding: 0;
   transition: transform 0.15s ease, background 0.2s ease, opacity 0.2s;
 }
 .icon-btn[hidden] { display: none; }
-.icon-btn svg { width: 24px; height: 24px; }
+.icon-btn svg { display: block; width: 24px; height: 24px; margin: 0 auto; }
 .icon-btn svg.solid { fill: currentColor; }
 .icon-btn:active { transform: scale(0.92); }
 .icon-btn.active { background: rgba(255, 210, 122, 0.22); border-color: rgba(255, 210, 122, 0.5); color: var(--accent); }
@@ -147,9 +148,8 @@ button {
   border: none;
   border-radius: 20px;
   background: transparent;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: block;
+  text-align: center;
   margin-right: 4px;
   scroll-snap-align: center;
   transition: background 0.2s ease, transform 0.15s ease;
@@ -161,6 +161,8 @@ button {
 }
 .chip-ball {
   position: relative;
+  display: block;
+  margin: 0 auto;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -181,6 +183,7 @@ button {
 }
 .chip:last-child { margin-right: 0; }
 .chip-name {
+  display: block;
   margin-top: 6px;
   font-size: 13px;
   font-weight: 600;
@@ -270,11 +273,10 @@ body.no-labels #labels { display: none; }
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.08);
-  display: grid;
-  place-items: center;
+  line-height: 0;
   padding: 0;
 }
-#info .close svg { width: 18px; height: 18px; }
+#info .close svg { display: block; width: 18px; height: 18px; margin: 0 auto; }
 
 .info-head { display: flex; align-items: center; padding-right: 40px; }
 .info-head > * + * { margin-left: 14px; }
