@@ -1,40 +1,40 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uk">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Планеты" />
+    <meta name="apple-mobile-web-app-title" content="Планети" />
     <meta name="theme-color" content="#000000" />
-    <title>Путешествие к планетам</title>
+    <title>Подорож до планет</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='16' fill='%23e3c48a'/%3E%3Cellipse cx='32' cy='32' rx='29' ry='8' fill='none' stroke='%23c9a86a' stroke-width='3' transform='rotate(-20 32 32)'/%3E%3C/svg%3E" />
   </head>
   <body>
     <canvas id="scene" touch-action="none"></canvas>
-    <div id="loader"><span class="loader-ball"></span><span class="loader-text">Летим в космос…</span></div>
+    <div id="loader"><span class="loader-ball"></span><span class="loader-text">Летимо в космос…</span></div>
 
     <div id="labels"></div>
 
     <header id="topbar">
       <div class="brand">
         <span class="brand-dot"></span>
-        <span class="brand-text">Путешествие к планетам</span>
+        <span class="brand-text">Подорож до планет</span>
       </div>
       <div class="actions">
-        <button class="icon-btn" id="btn-motion" aria-label="Пауза" title="Остановить движение (пробел)"></button>
-        <button class="icon-btn" id="btn-overview" aria-label="Вся Солнечная система" title="Вся Солнечная система (Esc)"></button>
-        <button class="icon-btn" id="btn-sound" aria-label="Звук" title="Называть планеты вслух (S)"></button>
-        <button class="icon-btn" id="btn-labels" aria-label="Подписи планет" title="Подписи планет (L)"></button>
+        <button class="icon-btn" id="btn-motion" aria-label="Пауза" title="Зупинити рух (пробіл)"></button>
+        <button class="icon-btn" id="btn-overview" aria-label="Уся Сонячна система" title="Уся Сонячна система (Esc)"></button>
+        <button class="icon-btn" id="btn-sound" aria-label="Звук" title="Називати планети вголос (S)"></button>
+        <button class="icon-btn" id="btn-labels" aria-label="Підписи планет" title="Підписи планет (L)"></button>
       </div>
     </header>
 
     <aside id="info" hidden></aside>
 
-    <div id="hint">Нажми на планету, чтобы полететь к ней</div>
+    <div id="hint">Натисни на планету, щоб полетіти до неї</div>
 
-    <nav id="dock" aria-label="Планеты"></nav>
+    <nav id="dock" aria-label="Планети"></nav>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

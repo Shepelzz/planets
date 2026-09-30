@@ -35,7 +35,7 @@ const loaderEl = document.getElementById('loader')!;
 const loaderText = loaderEl.querySelector('.loader-text')!;
 let texturesReady = false;
 loadingManager.onProgress = (_url, done, total) => {
-  loaderText.textContent = `Летим в космос… ${Math.round((done / total) * 100)}%`;
+  loaderText.textContent = `Летимо в космос… ${Math.round((done / total) * 100)}%`;
 };
 loadingManager.onLoad = () => {
   texturesReady = true;
@@ -288,7 +288,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш') ui.toggleInfo();
   if (e.key === 'l' || e.key === 'L' || e.key === 'д' || e.key === 'Д') ui.toggleLabels();
-  if (e.key === 's' || e.key === 'S' || e.key === 'ы' || e.key === 'Ы') ui.toggleSound();
+  if (e.key === 's' || e.key === 'S' || e.key === 'і' || e.key === 'І' || e.key === 'ы' || e.key === 'Ы') ui.toggleSound();
 });
 
 // ---------- labels ----------

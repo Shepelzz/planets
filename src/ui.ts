@@ -39,10 +39,10 @@ function sizeCompare(info: BodyInfo): string {
   const earthR = Math.max((1 / big) * max, 1.5);
   const bodyR = Math.max((ratio / big) * max, 1.5);
   let caption: string;
-  if (info.id === 'earth') caption = 'Это и есть Земля!';
-  else if (ratio >= 1.5) caption = `Больше Земли в ${fmt(ratio)} раз${plural(ratio)}`;
-  else if (ratio <= 0.67) caption = `Меньше Земли в ${fmt(1 / ratio)} раз${plural(1 / ratio)}`;
-  else caption = 'Почти как Земля';
+  if (info.id === 'earth') caption = 'Це і є Земля!';
+  else if (ratio >= 1.5) caption = `У ${fmt(ratio)} ${times(ratio)} більше за Землю`;
+  else if (ratio <= 0.67) caption = `У ${fmt(1 / ratio)} ${times(1 / ratio)} менше за Землю`;
+  else caption = 'Майже як Земля';
   return `
     <div class="compare talk" role="button" tabindex="0" data-say="${esc(NARRATION[info.id].compare)}">
       ${SAY_MARK}
@@ -54,22 +54,24 @@ function sizeCompare(info: BodyInfo): string {
         ${info.id === 'earth' ? '' : `
         <div class="compare-item">
           <div class="ball${iconClass(EARTH)}" style="width:${earthR * 2}px;height:${earthR * 2}px;background:${iconBg(EARTH)}"></div>
-          <span>Земля</span>
+          <span>${EARTH.name}</span>
         </div>`}
       </div>
-      <div class="compare-caption">${caption} (по ширине)</div>
+      <div class="compare-caption">${caption} (завширшки)</div>
     </div>`;
 }
 
 function fmt(x: number) {
-  if (x >= 10) return Math.round(x).toLocaleString('ru-RU');
-  return (Math.round(x * 10) / 10).toLocaleString('ru-RU');
+  if (x >= 10) return Math.round(x).toLocaleString('uk-UA');
+  return (Math.round(x * 10) / 10).toLocaleString('uk-UA');
 }
-function plural(x: number) {
+/** Ukrainian form of «раз»: 1 раз, 2–4 рази, 5+ разів, fractions — раза. */
+function times(x: number) {
+  if (!Number.isInteger(Math.round(x * 10) / 10)) return 'раза';
   const n = Math.round(x);
-  if (!Number.isInteger(Math.round(x * 10) / 10)) return 'а';
   const m10 = n % 10, m100 = n % 100;
-  return m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'а' : '';
+  if (m10 === 1 && m100 !== 11) return 'раз';
+  return m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'рази' : 'разів';
 }
 
 export function createUI(h: Handlers) {
@@ -136,7 +138,7 @@ export function createUI(h: Handlers) {
     const b = current;
     info.hidden = !infoWanted;
     info.innerHTML = `
-      <button class="close" aria-label="Скрыть">${ICONS.close}</button>
+      <button class="close" aria-label="Сховати">${ICONS.close}</button>
       <div class="info-head">
         <span class="info-ball${iconClass(b)}" style="background:${iconBg(b)}"></span>
         <div>
@@ -150,15 +152,15 @@ export function createUI(h: Handlers) {
         </dl>
         ${sizeCompare(b)}
         <section class="fact">
-          <h2>А ты знала?</h2>
+          <h2>А ти знала?</h2>
           <p class="fact-text talk" role="button" tabindex="0">${b.facts[factIndex % b.facts.length]}</p>
           <div class="fact-foot">
             <span class="dots">${b.facts.map((_, i) => `<i class="${i === factIndex % b.facts.length ? 'on' : ''}"></i>`).join('')}</span>
-            <button class="next-fact">Ещё факт</button>
+            <button class="next-fact">Ще факт</button>
           </div>
         </section>
       </div>
-      <p class="credit">Карты планет: <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> (CC BY 4.0) по данным NASA</p>`;
+      <p class="credit">Мапи планет: <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> (CC BY 4.0) за даними NASA</p>`;
     info.querySelector('.close')!.addEventListener('click', () => {
       infoWanted = false;
       renderInfo();
@@ -186,7 +188,7 @@ export function createUI(h: Handlers) {
     document.body.classList.toggle('no-labels', !labelsOn);
     btnLabels.classList.toggle('active', labelsOn);
     btnLabels.setAttribute('aria-pressed', String(labelsOn));
-    btnLabels.title = labelsOn ? 'Спрятать подписи планет (L)' : 'Показать подписи планет (L)';
+    btnLabels.title = labelsOn ? 'Сховати підписи планет (L)' : 'Показати підписи планет (L)';
   }
   function toggleLabels() {
     labelsOn = !labelsOn;
@@ -205,7 +207,7 @@ export function createUI(h: Handlers) {
     btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
     btnSound.classList.toggle('active', soundOn);
     btnSound.setAttribute('aria-pressed', String(soundOn));
-    btnSound.title = soundOn ? 'Не называть планеты вслух (S)' : 'Называть планеты вслух (S)';
+    btnSound.title = soundOn ? 'Не називати планети вголос (S)' : 'Називати планети вголос (S)';
   }
   function toggleSound() {
     soundOn = !soundOn;
@@ -239,7 +241,7 @@ export function createUI(h: Handlers) {
     btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
     btnSound.classList.toggle('active', soundOn);
     btnSound.setAttribute('aria-pressed', String(soundOn));
-    btnSound.title = soundOn ? 'Не называть планеты вслух (S)' : 'Называть планеты вслух (S)';
+    btnSound.title = soundOn ? 'Не називати планети вголос (S)' : 'Називати планети вголос (S)';
   }
   function toggleSound() {
     soundOn = !soundOn;
@@ -280,8 +282,8 @@ export function createUI(h: Handlers) {
     },
     setPlaying(p: boolean) {
       btnMotion.innerHTML = p ? ICONS.pause : ICONS.play;
-      btnMotion.setAttribute('aria-label', p ? 'Пауза' : 'Продолжить');
-      btnMotion.title = p ? 'Остановить движение (пробел)' : 'Запустить движение (пробел)';
+      btnMotion.setAttribute('aria-label', p ? 'Пауза' : 'Продовжити');
+      btnMotion.title = p ? 'Зупинити рух (пробіл)' : 'Запустити рух (пробіл)';
     },
     toggleInfo() {
       if (!current) return;

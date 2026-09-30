@@ -1,4 +1,4 @@
-// Speaks planet names aloud with the browser's built-in speech synthesis (Russian voice).
+// Speaks planet names aloud with the browser's built-in speech synthesis (Ukrainian voice, Lesya on Apple devices).
 
 const synth: SpeechSynthesis | undefined = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
 let enabled = true;
@@ -6,9 +6,9 @@ let voice: SpeechSynthesisVoice | null = null;
 
 function pickVoice() {
   if (!synth) return;
-  const ru = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith('ru'));
+  const uk = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith('uk'));
   // prefer an on-device voice (works offline, starts instantly)
-  voice = ru.find((v) => v.localService) ?? ru[0] ?? null;
+  voice = uk.find((v) => v.localService) ?? uk[0] ?? null;
 }
 
 if (synth) {
@@ -33,10 +33,11 @@ export function say(text: string, onDone?: () => void): boolean {
   if (!voice) pickVoice();
   synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ru-RU';
+  u.lang = 'uk-UA';
   if (voice) u.voice = voice;
-  u.rate = 0.9; // a little slower, easier for a child to follow
-  u.pitch = 1.05;
+  // a brighter, livelier voice: higher pitch, normal tempo (slower sounds sleepy)
+  u.rate = 1.0;
+  u.pitch = 1.3;
   if (onDone) {
     let done = false;
     const finish = () => {
