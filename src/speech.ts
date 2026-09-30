@@ -1,8 +1,18 @@
-// Speaks planet names aloud with the browser's built-in speech synthesis (Ukrainian voice, Lesya on Apple devices).
+// Speaks phrases aloud. Every text the app says is pre-recorded with the Ukrainian voice Lesya
+// (scripts/build-voice.ts → public/voice), because devices without that voice — old iPads on
+// iOS 12 — would read Ukrainian with a Russian one. The browser's speech synthesis is only a
+// fallback for phrases that have no recording yet.
 
+import manifest from './voice-manifest.json';
+import { VOICE_PITCH, voiceKey } from './voiceKey';
+
+const recorded = new Set<string>(manifest);
 const synth: SpeechSynthesis | undefined = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
 let enabled = true;
 let voice: SpeechSynthesisVoice | null = null;
+// One element reused for every phrase: iOS unlocks playback per element on the first tap.
+let audio: HTMLAudioElement | null = null;
+let finishCurrent: (() => void) | null = null;
 
 function pickVoice() {
   if (!synth) return;
@@ -17,11 +27,20 @@ if (synth) {
   synth.onvoiceschanged = pickVoice;
 }
 
-export const speechSupported = !!synth;
+export const speechSupported = recorded.size > 0 || !!synth;
+
+/** Stop whatever is playing and report it as finished. */
+function stop() {
+  if (audio) audio.pause();
+  synth?.cancel();
+  const f = finishCurrent;
+  finishCurrent = null;
+  f?.();
+}
 
 export function setSpeechEnabled(on: boolean) {
   enabled = on;
-  if (!on) synth?.cancel();
+  if (!on) stop();
 }
 
 /**
@@ -29,28 +48,51 @@ export function setSpeechEnabled(on: boolean) {
  * user gesture). onDone runs when this phrase ends or is cut off. Returns false when muted.
  */
 export function say(text: string, onDone?: () => void): boolean {
-  if (!enabled || !synth) return false;
+  if (!enabled) return false;
+  stop();
+
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    if (finishCurrent === finish) finishCurrent = null;
+    onDone?.();
+  };
+  finishCurrent = finish;
+
+  const key = voiceKey(text);
+  if (recorded.has(key)) {
+    if (!audio) audio = new Audio();
+    audio.onended = finish;
+    audio.onerror = () => {
+      // recording missing or not playable: read it with the built-in voice instead
+      if (!done) speakWithSynth(text, finish);
+    };
+    audio.src = `${import.meta.env.BASE_URL}voice/${key}.m4a`;
+    const p = audio.play();
+    if (p) p.catch(() => undefined); // an interrupted play() rejects; nothing to do
+    return true;
+  }
+  if (!synth) {
+    finish();
+    return false;
+  }
+  speakWithSynth(text, finish);
+  return true;
+}
+
+function speakWithSynth(text: string, finish: () => void) {
+  if (!synth) return finish();
   if (!voice) pickVoice();
-  synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'uk-UA';
   if (voice) u.voice = voice;
   // a brighter, livelier voice: higher pitch, normal tempo (slower sounds sleepy)
   u.rate = 1.0;
-  u.pitch = 1.3;
-  if (onDone) {
-    let done = false;
-    const finish = () => {
-      if (!done) {
-        done = true;
-        onDone();
-      }
-    };
-    u.onend = finish;
-    u.onerror = finish;
-    // some Safari versions never fire onend: don't leave the block highlighted forever
-    setTimeout(finish, 1500 + text.length * 110);
-  }
+  u.pitch = VOICE_PITCH;
+  u.onend = finish;
+  u.onerror = finish;
+  // some Safari versions never fire onend: don't leave the block highlighted forever
+  setTimeout(finish, 1500 + text.length * 110);
   synth.speak(u);
-  return true;
 }

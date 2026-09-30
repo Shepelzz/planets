@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "voice": "node scripts/build-voice.ts"
   },
   "dependencies": {
     "pepjs": "^0.5.3",
