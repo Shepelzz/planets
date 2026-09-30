@@ -88,7 +88,9 @@ void main() {
   col += spec * pow(max(dot(N, H), 0.0), 160.0) * 0.28 * terminator * shadow * vec3(1.0, 0.9, 0.75);
   col += spec * pow(1.0 - max(dot(Ng, V), 0.0), 5.0) * 0.08 * terminator * vec3(0.4, 0.6, 1.0);
   col += night * smoothstep(0.08, -0.18, geo);
-  col += albedo * 0.01;
+  // soft light on the night side (starlight / light bounced off neighbours): the surface stays
+  // readable, a bit stronger towards the viewer for a sense of volume; city lights still show
+  col += albedo * (0.035 + 0.075 * max(dot(Ng, V), 0.0));
   // seen from far away (the overview), light the side facing the camera a little, so planets
   // between us and the Sun read as planets instead of black dots; close up the night stays dark
   // (small bodies count as Earth-sized, or the Moon would get the fill light even up close)
@@ -112,7 +114,7 @@ void main() {
   vec3 L = normalize(uSunPos - vWorldPos);
   float geo = dot(N, L);
   float lit = max(geo, 0.0) * smoothstep(-0.05, 0.15, geo);
-  vec3 col = vec3(1.0) * lit * 2.2 + vec3(0.003);
+  vec3 col = vec3(1.0) * lit * 2.2 + vec3(0.05); // night-side clouds stay faintly visible
   gl_FragColor = vec4(col, a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
