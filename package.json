@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "voice": "node scripts/build-voice.ts"
+    "voice": "node scripts/build-voice.ts",
+    "voice:el": "node scripts/voice-elevenlabs.ts"
   },
   "dependencies": {
     "pepjs": "^0.5.3",
