@@ -38,6 +38,10 @@ export interface BodyInfo {
 // Earth's year ≈ 150 s on screen; other orbits follow the real period ratios.
 const YEAR = 150;
 
+// Show sizes, not real ones: real proportions leave tiny dots around a huge Sun. The power < 1
+// squeezes the range while keeping the order (Jupiter > Saturn > … > Mercury); Earth = 3.3.
+const size = (earthDiameters: number) => 3.3 * Math.pow(earthDiameters, 0.45);
+
 export const BODIES: BodyInfo[] = [
   {
     id: 'sun',
@@ -59,7 +63,7 @@ export const BODIES: BodyInfo[] = [
       'Усі планети кружляють навколо Сонця, наче на каруселі.',
       'Ніколи не дивись на справжнє Сонце — це небезпечно для очей!',
     ],
-    radius: 22,
+    radius: 36, // bigger than the formula (27): the Sun should dominate the overview
     orbit: 0,
     orbitSeconds: 0,
     spinSeconds: 400,
@@ -86,8 +90,8 @@ export const BODIES: BodyInfo[] = [
       'Удень там спекотніше, ніж у духовці, а вночі холодніше, ніж у морозилці: у Меркурія немає повітря, щоб тримати тепло.',
       'Меркурій — найшвидша планета, він мчить навколо Сонця швидше за всіх.',
     ],
-    radius: 0.38,
-    orbit: 48,
+    radius: size(0.383),
+    orbit: 58,
     orbitSeconds: YEAR * 0.241,
     spinSeconds: 90,
     tilt: 0,
@@ -114,8 +118,8 @@ export const BODIES: BodyInfo[] = [
       'З Землі Венеру видно як дуже яскраву зірку. Її називають Вечірньою зорею.',
       'За розміром Венера майже як Земля — тому їх називають планетами-сестрами.',
     ],
-    radius: 0.95,
-    orbit: 66,
+    radius: size(0.949),
+    orbit: 74,
     orbitSeconds: YEAR * 0.615,
     spinSeconds: 300, // tilt 177° already makes it spin backwards
     tilt: 177,
@@ -144,8 +148,8 @@ export const BODIES: BodyInfo[] = [
       'Повітря захищає нас від маленьких метеоритів: вони згоряють і стають «падаючими зірками».',
       'Уночі з космосу видно вогники міст.',
     ],
-    radius: 1,
-    orbit: 88,
+    radius: size(1),
+    orbit: 92,
     orbitSeconds: YEAR,
     spinSeconds: 60,
     tilt: 23.4,
@@ -175,8 +179,8 @@ export const BODIES: BodyInfo[] = [
       'Місяць не світить сам — він відбиває світло Сонця, як дзеркало.',
       'Темні плями на Місяці — це застигла давня лава. Їх називають морями, хоча води там немає.',
     ],
-    radius: 0.27,
-    orbit: 4.2,
+    radius: size(0.273),
+    orbit: 7.5,
     orbitSeconds: 40,
     spinSeconds: 40, // tidally locked: same as its orbit
     tilt: 6.7,
@@ -205,8 +209,8 @@ export const BODIES: BodyInfo[] = [
       'Захід сонця на Марсі блакитний, а вдень небо там рудувате.',
       'Доба на Марсі майже така сама, як на Землі, — лише на 37 хвилин довша.',
     ],
-    radius: 0.53,
-    orbit: 112,
+    radius: size(0.532),
+    orbit: 110,
     orbitSeconds: YEAR * 1.881,
     spinSeconds: 62,
     tilt: 25.2,
@@ -235,8 +239,8 @@ export const BODIES: BodyInfo[] = [
       'Юпітер крутиться швидше за всі планети: доба там триває лише 10 годин.',
       'У Юпітера теж є кільця, тільки дуже тонкі й темні — їх майже не видно.',
     ],
-    radius: 11.2 * 0.6,
-    orbit: 165,
+    radius: size(10.97),
+    orbit: 145,
     orbitSeconds: YEAR * 11.86,
     spinSeconds: 26,
     tilt: 3.1,
@@ -265,8 +269,8 @@ export const BODIES: BodyInfo[] = [
       'Кільця величезні завширшки, але дуже тонкі — місцями лише близько 10 метрів.',
       'На найбільшому супутнику Сатурна, Титані, є озера — тільки не з води, а з рідкого газу.',
     ],
-    radius: 9.45 * 0.6,
-    orbit: 225,
+    radius: size(9.14),
+    orbit: 190,
     orbitSeconds: YEAR * 29.45,
     spinSeconds: 28,
     tilt: 26.7,
@@ -296,8 +300,8 @@ export const BODIES: BodyInfo[] = [
       'На полюсі Урана Сонце не заходить 42 роки поспіль, а потім 42 роки триває ніч!',
       'Супутники Урана назвали на честь героїв казок і п’єс: Титанія, Оберон, Міранда.',
     ],
-    radius: 4.0 * 0.75,
-    orbit: 280,
+    radius: size(3.98),
+    orbit: 232,
     orbitSeconds: YEAR * 84,
     spinSeconds: 40, // tilt 98° already makes it retrograde
     tilt: 97.8,
@@ -325,8 +329,8 @@ export const BODIES: BodyInfo[] = [
       'Відтоді як Нептун відкрили у 1846 році, він облетів Сонце лише один раз.',
       'Світлу Сонця потрібно понад 4 години, щоб долетіти до Нептуна.',
     ],
-    radius: 3.88 * 0.75,
-    orbit: 330,
+    radius: size(3.86),
+    orbit: 260,
     orbitSeconds: YEAR * 164.8,
     spinSeconds: 38,
     tilt: 28.3,

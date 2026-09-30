@@ -88,7 +88,11 @@ void main() {
   col += spec * pow(max(dot(N, H), 0.0), 160.0) * 0.28 * terminator * shadow * vec3(1.0, 0.9, 0.75);
   col += spec * pow(1.0 - max(dot(Ng, V), 0.0), 5.0) * 0.08 * terminator * vec3(0.4, 0.6, 1.0);
   col += night * smoothstep(0.08, -0.18, geo);
-  col += albedo * 0.004;
+  col += albedo * 0.01;
+  // seen from far away (the overview), light the side facing the camera a little, so planets
+  // between us and the Sun read as planets instead of black dots; close up the night stays dark
+  float far = smoothstep(120.0, 320.0, distance(cameraPosition, uCenter));
+  col += albedo * far * 0.45 * max(dot(Ng, V), 0.0);
 
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -248,7 +252,7 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   const outer = new THREE.Sprite(glowMat(glowTexture([
     [0, 'rgba(255,220,170,0.5)'], [0.2, 'rgba(255,190,120,0.12)'], [0.5, 'rgba(255,160,90,0.03)'], [1, 'rgba(255,150,80,0)'],
   ]), 1));
-  outer.scale.setScalar(info.radius * 26);
+  outer.scale.setScalar(info.radius * 17);
   anchor.add(inner, outer);
   anchor.userData.halo = outer;
   scene.add(anchor);

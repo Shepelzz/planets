@@ -96,7 +96,7 @@ interface Flight {
 }
 let flight: Flight | null = null;
 
-const OVERVIEW_OFFSET = new THREE.Vector3(0, 260, 470);
+const OVERVIEW_OFFSET = new THREE.Vector3(0, 205, 370);
 
 /** Screen area not covered by the top bar, dock and info panel. */
 function freeArea() {
@@ -194,7 +194,7 @@ function configureLimits() {
     controls.minDistance = r * (focus.info.id === 'sun' ? 1.6 : 1.25);
     controls.maxDistance = Math.max(fitDistance(focus.viewRadius) * 6, r * 20);
   } else {
-    controls.minDistance = 20;
+    controls.minDistance = 85; // stay outside the Sun
     controls.maxDistance = 1500;
   }
 }
