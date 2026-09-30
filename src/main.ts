@@ -349,7 +349,7 @@ flyTo(null);
 ui.setSelected(null);
 
 // debug handle
-(window as unknown as { space: unknown }).space = { lowEnd, getPixelRatio: () => pixelRatio, renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d) };
+(window as unknown as { space: unknown }).space = { scene, lowEnd, getPixelRatio: () => pixelRatio, renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d) };
 
 // ---------- loop ----------
 let lastNow = performance.now();
