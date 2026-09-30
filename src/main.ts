@@ -8,6 +8,7 @@ import { createSky } from './sky';
 import { createUI } from './ui';
 import { loadingManager, useLiteTextures } from './textures';
 import { renderThumbnails } from './thumbnails';
+import { NARRATION } from './narration';
 import { say } from './speech';
 import './style.css';
 
@@ -147,7 +148,7 @@ function focusOffset(b: Body) {
 }
 
 function flyTo(b: Body | null, duration?: number) {
-  if (b) say(b.info.name);
+  if (b) say(NARRATION[b.info.id].intro);
   ui.setSelected(b ? b.info.id : null); // first, so the panel's size is known for framing
   flight = {
     t: 0,
@@ -269,7 +270,7 @@ const ui = createUI({
     if (b !== focus || flight) flyTo(b);
     else {
       ui.showInfo();
-      say(b.info.name); // tapping the same planet again repeats its name
+      say(NARRATION[b.info.id].intro); // tapping the same planet again repeats the intro
     }
   },
   onOverview: () => flyTo(null),
