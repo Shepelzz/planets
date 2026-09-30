@@ -1,5 +1,6 @@
 import { BODIES, EARTH_DIAMETER, type BodyId, type BodyInfo } from './data';
-import { setSpeechEnabled, speechSupported } from './speech';
+import { NARRATION } from './narration';
+import { say, setSpeechEnabled, speechSupported } from './speech';
 
 interface Handlers {
   onSelect: (id: BodyId) => void;
@@ -27,6 +28,10 @@ function iconBg(info: BodyInfo): string {
 }
 const iconClass = (info: BodyInfo) => (thumbs[info.id] ? ' textured' : '');
 
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+// small speaker mark on blocks that talk when tapped (hidden while sound is off)
+const SAY_MARK = '<svg class="say-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
 function sizeCompare(info: BodyInfo): string {
   const ratio = info.diameterKm / EARTH_DIAMETER;
   const max = 64;
@@ -39,7 +44,8 @@ function sizeCompare(info: BodyInfo): string {
   else if (ratio <= 0.67) caption = `Меньше Земли в ${fmt(1 / ratio)} раз${plural(1 / ratio)}`;
   else caption = 'Почти как Земля';
   return `
-    <div class="compare">
+    <div class="compare talk" role="button" tabindex="0" data-say="${esc(NARRATION[info.id].compare)}">
+      ${SAY_MARK}
       <div class="compare-pics">
         <div class="compare-item">
           <div class="ball${iconClass(info)}" style="width:${bodyR * 2}px;height:${bodyR * 2}px;background:${iconBg(info)}"></div>
@@ -94,6 +100,30 @@ export function createUI(h: Handlers) {
     ball.classList.toggle('textured', !!thumbs[b.id]);
   }
 
+  // ---- narration: tapping a block on the card reads it aloud ----
+  let speakingEl: HTMLElement | null = null;
+  function talk(el: HTMLElement, text: string) {
+    speakingEl?.classList.remove('speaking');
+    speakingEl = el;
+    const spoke = say(text, () => {
+      el.classList.remove('speaking');
+      if (speakingEl === el) speakingEl = null;
+    });
+    if (spoke) el.classList.add('speaking');
+  }
+  function onTalkTap(e: Event) {
+    const el = (e.target as HTMLElement).closest('.talk') as HTMLElement | null;
+    if (!el || !info.contains(el)) return;
+    talk(el, el.dataset.say ?? el.textContent ?? '');
+  }
+  info.addEventListener('click', onTalkTap);
+  info.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onTalkTap(e);
+    }
+  });
+
   let current: BodyInfo | null = null;
   let factIndex = 0;
   let infoWanted = true;
@@ -110,18 +140,18 @@ export function createUI(h: Handlers) {
       <div class="info-head">
         <span class="info-ball${iconClass(b)}" style="background:${iconBg(b)}"></span>
         <div>
-          <h1>${b.name}</h1>
+          <h1 class="talk" data-say="${esc(`${b.name}. ${b.kind}.`)}">${b.name}</h1>
           <p class="kind">${b.kind}</p>
         </div>
       </div>
       <div class="info-body">
         <dl class="stats">
-          ${b.stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}
+          ${b.stats.map(([k, v]) => `<div class="talk" role="button" tabindex="0" data-say="${esc(NARRATION[b.id].stats[k] ?? `${k}: ${v}`)}">${SAY_MARK}<dt>${k}</dt><dd>${v}</dd></div>`).join('')}
         </dl>
         ${sizeCompare(b)}
         <section class="fact">
           <h2>А ты знала?</h2>
-          <p class="fact-text">${b.facts[factIndex % b.facts.length]}</p>
+          <p class="fact-text talk" role="button" tabindex="0">${b.facts[factIndex % b.facts.length]}</p>
           <div class="fact-foot">
             <span class="dots">${b.facts.map((_, i) => `<i class="${i === factIndex % b.facts.length ? 'on' : ''}"></i>`).join('')}</span>
             <button class="next-fact">Ещё факт</button>
@@ -141,6 +171,7 @@ export function createUI(h: Handlers) {
       p.textContent = b.facts[factIndex % b.facts.length];
       p.classList.add('pop');
       info.querySelectorAll('.dots i').forEach((d, i) => d.classList.toggle('on', i === factIndex % b.facts.length));
+      talk(p, p.textContent!);
     });
   }
 
@@ -170,6 +201,7 @@ export function createUI(h: Handlers) {
   }
   function applySound() {
     setSpeechEnabled(soundOn);
+    document.body.classList.toggle('no-sound', !soundOn);
     btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
     btnSound.classList.toggle('active', soundOn);
     btnSound.setAttribute('aria-pressed', String(soundOn));
@@ -203,6 +235,7 @@ export function createUI(h: Handlers) {
   }
   function applySound() {
     setSpeechEnabled(soundOn);
+    document.body.classList.toggle('no-sound', !soundOn);
     btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
     btnSound.classList.toggle('active', soundOn);
     btnSound.setAttribute('aria-pressed', String(soundOn));

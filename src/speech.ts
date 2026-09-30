@@ -24,9 +24,12 @@ export function setSpeechEnabled(on: boolean) {
   if (!on) synth?.cancel();
 }
 
-/** Say a short phrase, interrupting whatever is being said. Call from a tap/click handler (iOS needs a user gesture). */
-export function say(text: string) {
-  if (!enabled || !synth) return;
+/**
+ * Say a phrase, interrupting whatever is being said. Call from a tap/click handler (iOS needs a
+ * user gesture). onDone runs when this phrase ends or is cut off. Returns false when muted.
+ */
+export function say(text: string, onDone?: () => void): boolean {
+  if (!enabled || !synth) return false;
   if (!voice) pickVoice();
   synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
@@ -34,5 +37,19 @@ export function say(text: string) {
   if (voice) u.voice = voice;
   u.rate = 0.9; // a little slower, easier for a child to follow
   u.pitch = 1.05;
+  if (onDone) {
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        onDone();
+      }
+    };
+    u.onend = finish;
+    u.onerror = finish;
+    // some Safari versions never fire onend: don't leave the block highlighted forever
+    setTimeout(finish, 1500 + text.length * 110);
+  }
   synth.speak(u);
+  return true;
 }
