@@ -181,9 +181,11 @@ void main() {
   vec3 oc = vWorldPos - uCenter;
   float b = dot(oc, L);
   float closest = length(oc - L * b);
-  float shadow = b < 0.0 ? smoothstep(uRadius * 0.97, uRadius * 1.03, closest) : 1.0;
+  // soft, partial shadow: fully black rings looked too harsh
+  float inShadow = b < 0.0 ? 1.0 - smoothstep(uRadius * 0.88, uRadius * 1.08, closest) : 0.0;
+  float shadow = 1.0 - inShadow * 0.55;
   float sameSide = sign(dot(uRingNormal, L)) * sign(dot(uRingNormal, V));
-  float lit = sameSide > 0.0 ? 1.0 : 0.35 * (1.0 - dens * 0.6);
+  float lit = sameSide > 0.0 ? 1.0 : 0.6 * (1.0 - dens * 0.45); // light seeping through from the sunlit side
   vec3 col = srgbToLinear(ring.rgb) * 2.3 * lit * shadow * (0.6 + 0.4 * abs(dot(uRingNormal, L)) + 0.3);
   gl_FragColor = vec4(col, dens * 0.95);
   #include <tonemapping_fragment>
