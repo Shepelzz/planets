@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Планеты" />
+    <meta name="theme-color" content="#000000" />
+    <title>Путешествие к планетам</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='16' fill='%23e3c48a'/%3E%3Cellipse cx='32' cy='32' rx='29' ry='8' fill='none' stroke='%23c9a86a' stroke-width='3' transform='rotate(-20 32 32)'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="loader"><span class="loader-ball"></span><span class="loader-text">Летим в космос…</span></div>
+
+    <div id="labels"></div>
+
+    <header id="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-text">Путешествие к планетам</span>
+      </div>
+      <div class="actions">
+        <button class="icon-btn" id="btn-motion" aria-label="Пауза" title="Остановить движение (пробел)"></button>
+        <button class="icon-btn" id="btn-overview" aria-label="Вся Солнечная система" title="Вся Солнечная система (Esc)"></button>
+        <button class="icon-btn" id="btn-info" aria-label="Показать рассказ о планете" title="Рассказ о планете (I)"></button>
+      </div>
+    </header>
+
+    <aside id="info" hidden></aside>
+
+    <div id="hint">Нажми на планету, чтобы полететь к ней</div>
+
+    <nav id="dock" aria-label="Планеты"></nav>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
