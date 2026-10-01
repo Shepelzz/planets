@@ -66,6 +66,11 @@ npm run voice:all
 выполнить `space.makeOgCards()` (или `space.makeOgCards(['saturn'])`); вкладка должна быть видна.
 Обзор системы использует `public/og.jpg`.
 
+Для поисковиков там же: в каждой странице `<link rel="canonical">` и скрытый для глаз текст с
+содержимым карточки (вступление, цифры, факты; у обзора — ссылки на все тела), плюс
+`robots.txt` и `sitemap.xml` со всеми адресами (sitemap — только когда известен адрес сайта:
+`RENDER_EXTERNAL_URL` на Render или `SITE_URL`).
+
 ## На экран «Домой» и офлайн
 
 Иконка — Сатурн (`public/icons/`), манифест `manifest.webmanifest` собирается из `texts.yaml`

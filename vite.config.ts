@@ -132,19 +132,44 @@ function pages(): Plugin {
         const file = id && existsSync(join(root, 'public', 'og', `${id}.jpg`)) ? `og/${id}.jpg` : 'og.jpg';
         return `${site}/${file}?v=${fingerprint(join(root, 'public', file))}`;
       };
-      const page = (path: string, title: string, description: string, img: string, alt: string) => {
+      type Body = { name: string; kind: string; intro: string; stats: Record<string, { label: string; value: string }>; facts: string[] };
+      const bodies = data.bodies as Record<string, Body>;
+      const url = (path: string) => `${site}/${path}`;
+      const canonical = (path: string) => (site ? `<link rel="canonical" href="${esc(url(path))}" />` : '');
+      // what the page is about, as plain text for search engines and screen readers (the app itself
+      // draws everything on a canvas and fills the card from scripts); visually hidden
+      const about = (id: string | null) => {
+        const one = (s: string) => esc(s.replace(/\s*\n\s*/g, ' '));
+        if (!id)
+          return `<section id="about" class="sr-only"><h2>${esc(ui.title)}</h2><p>${one(ui.description)}</p><ul>${Object.entries(bodies)
+            .map(([bid, b]) => `<li><a href="/${bid}">${one(b.name)}</a> — ${one(b.kind)}</li>`).join('')}</ul></section>`;
+        const b = bodies[id];
+        return `<section id="about" class="sr-only"><h2>${one(b.name)} — ${one(b.kind)}</h2><p>${one(b.intro)}</p><dl>${Object.values(b.stats)
+          .map((st) => `<dt>${one(st.label)}</dt><dd>${one(st.value)}</dd>`).join('')}</dl><h3>${esc(ui.did_you_know)}</h3><ul>${b.facts
+          .map((f) => `<li>${one(f)}</li>`).join('')}</ul><p><a href="/solar-system">${esc(ui.title)}</a></p></section>`;
+      };
+      const fill = (html: string, path: string, id: string | null) =>
+        html.replace('</head>', `    ${canonical(path)}\n  </head>`).replace('<canvas id="scene"', `${about(id)}\n    <canvas id="scene"`);
+      const page = (path: string, id: string | null, title: string, description: string, img: string, alt: string) => {
         if (!routes.includes(`source: /${path}\n`)) throw new Error(`render.yaml: no route for /${path} (add a rewrite to /${path}.html)`);
         let html = base.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
         html = setMeta(html, 'name', 'description', description);
-        for (const [k, v] of [['og:title', title], ['og:description', description], ['og:url', `${site}/${path}`], ['og:image', img], ['og:image:alt', alt]])
+        for (const [k, v] of [['og:title', title], ['og:description', description], ['og:url', url(path)], ['og:image', img], ['og:image:alt', alt]])
           html = setMeta(html, 'property', k, v);
         for (const [k, v] of [['twitter:title', title], ['twitter:description', description], ['twitter:image', img]])
           html = setMeta(html, 'name', k, v);
-        writeFileSync(join(out, `${path}.html`), html);
+        writeFileSync(join(out, `${path}.html`), fill(html, path, id));
       };
-      page('solar-system', ui.title, ui.share_description, image(null), ui.share_image_alt);
-      for (const [id, b] of Object.entries(data.bodies as Record<string, { name: string; kind: string; intro: string }>))
-        page(id, `${b.name} — ${ui.title}`, b.intro, image(id), `${b.name}: ${b.kind}`);
+      page('solar-system', null, ui.title, ui.share_description, image(null), ui.share_image_alt);
+      for (const [id, b] of Object.entries(bodies)) page(id, id, `${b.name} — ${ui.title}`, b.intro, image(id), `${b.name}: ${b.kind}`);
+      // the root is the same as /solar-system: say so, and give it the same text
+      writeFileSync(join(out, 'index.html'), fill(base, 'solar-system', null));
+      // for search engines: every address, and where the list is (needs the site's address)
+      const paths = ['solar-system', ...Object.keys(bodies)];
+      writeFileSync(join(out, 'robots.txt'), `User-agent: *\nAllow: /\n${site ? `Sitemap: ${site}/sitemap.xml\n` : ''}`);
+      if (site)
+        writeFileSync(join(out, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths
+          .map((p) => `  <url><loc>${esc(url(p))}</loc></url>`).join('\n')}\n</urlset>\n`);
     },
   };
 }
