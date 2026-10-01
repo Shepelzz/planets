@@ -250,6 +250,8 @@ function showAddress(b: Body | null, how: 'push' | 'replace' | 'none') {
 }
 window.addEventListener('popstate', () => flyTo(bodyFromPath(), undefined, 'none'));
 
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
 function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 'none' = 'push') {
   showAddress(b, address);
   cutaway.close();
@@ -271,6 +273,7 @@ function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 
   // longer trips take a little longer, so the speed always feels calm
   const dest = (b ? b.anchor.position : flight.overviewTarget!).clone().add(worldOffset(flight));
   flight.duration = duration ?? THREE.MathUtils.clamp(2.2 + camera.position.distanceTo(dest) / 350, 2.4, 4.2);
+  if (duration === undefined && reducedMotion.matches) flight.duration = 0.9; // «reduce motion»: short, plain flights
   focus = b;
   controls.enabled = false;
 }

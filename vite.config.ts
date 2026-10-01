@@ -224,7 +224,9 @@ function ogCards(): Plugin {
     configureServer(server) {
       server.middlewares.use('/__og/', (req, res) => {
         const id = (req.url ?? '').replace(/^\//, '');
-        if (req.method !== 'POST' || !/^[a-z_]+$/.test(id)) {
+        // the dev server is open to the local network (for the iPad): only this computer may save files
+        const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+        if (req.method !== 'POST' || !local || !/^[a-z_]+$/.test(id)) {
           res.statusCode = 400;
           res.end();
           return;
