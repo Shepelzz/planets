@@ -62,7 +62,8 @@ loadEnv();
 interface Config {
   voice: { id: string; name: string };
   model: string;
-  voiceSettings: Record<string, number | boolean>;
+  /** optional: without it the model's own defaults are used (how Eleven v4 sounds best) */
+  voiceSettings?: Record<string, number | boolean>;
   outputFormat: string;
 }
 const config = JSON.parse(readFileSync(join(root, 'scripts', 'elevenlabs-config.json'), 'utf8')) as Config;
@@ -73,7 +74,7 @@ const phrasesByPriority = () => spokenPhrases(content);
 
 class QuotaError extends Error {}
 
-async function speak(voiceId: string, text: string, outM4a: string): Promise<number> {
+async function speak(voiceId: string, text: string, outM4a: string, attempt = 0): Promise<number> {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) throw new Error('ELEVENLABS_API_KEY is missing: add it to planets/.env.local');
   const res = await fetch(`${API}/text-to-speech/${voiceId}?output_format=${config.outputFormat}`, {
@@ -82,11 +83,16 @@ async function speak(voiceId: string, text: string, outM4a: string): Promise<num
     body: JSON.stringify({
       text,
       model_id: model,
-      voice_settings: config.voiceSettings,
+      ...(config.voiceSettings ? { voice_settings: config.voiceSettings } : {}),
     }),
   });
   if (!res.ok) {
     const body = await res.text();
+    // too many requests at once or a busy server: not the quota, wait and try again
+    if ((res.status === 429 || res.status === 503) && /concurren|busy|rate/i.test(body) && attempt < 6) {
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      return speak(voiceId, text, outM4a, attempt + 1);
+    }
     if (res.status === 429 || /quota|credits|limit/i.test(body)) throw new QuotaError(body.slice(0, 300));
     throw new Error(`${res.status}: ${body.slice(0, 300)}`);
   }
@@ -147,15 +153,29 @@ if (args[0] === '--samples') {
   }
   const outDir = join(root, 'public', 'voice');
   try {
-    for (const { text } of phrases) {
-      const k = voiceKey(text);
-      if (k in progress.done) continue;
-      const cost = await speak(voiceId, text, join(outDir, `${k}.m4a`));
-      progress.done[k] = cost;
-      progress.charsSpent += cost;
-      save();
-      process.stdout.write(`\r${Object.keys(progress.done).length}/${phrases.length} recorded`);
-    }
+    // a few requests at once (paid plans allow several): v4 takes seconds per phrase
+    const todo = phrases.map((p) => p.text).filter((t) => !(voiceKey(t) in progress.done));
+    const CONCURRENCY = Number(process.env.ELEVENLABS_CONCURRENCY) || 4;
+    let next = 0;
+    let quota: QuotaError | null = null;
+    const worker = async () => {
+      while (next < todo.length && !quota) {
+        const text = todo[next++];
+        const k = voiceKey(text);
+        try {
+          const cost = await speak(voiceId, text, join(outDir, `${k}.m4a`));
+          progress.done[k] = cost;
+          progress.charsSpent += cost;
+          save();
+          process.stdout.write(`\r${Object.keys(progress.done).length}/${phrases.length} recorded`);
+        } catch (e) {
+          if (e instanceof QuotaError) quota = e;
+          else throw e;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    if (quota) throw quota;
     console.log('\nall phrases recorded');
   } catch (e) {
     save();
