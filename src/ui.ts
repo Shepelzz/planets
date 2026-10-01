@@ -1,11 +1,14 @@
 import { BODIES, EARTH_DIAMETER, type BodyId, type BodyInfo } from './data';
 import { NARRATION } from './narration';
+import { STRUCTURE_LABEL } from './phrases';
 import { say, setSpeechEnabled, speechSupported } from './speech';
 
 interface Handlers {
   onSelect: (id: BodyId) => void;
   onOverview: () => void;
   onTogglePlay: () => void;
+  /** Open (or close, if open) the cut-away of the current body; onEnd when its story ends. Returns true if it opened. */
+  onStructure: (onEnd: () => void) => boolean;
 }
 
 const EARTH = BODIES.find((b) => b.id === 'earth')!;
@@ -30,6 +33,8 @@ const iconClass = (info: BodyInfo) => (thumbs[info.id] ? ' textured' : '');
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 // small speaker mark on blocks that talk when tapped (hidden while sound is off)
+// a little knife-cut planet: marks the block that opens the cut-away
+const CUT_MARK = '<svg class="say-mark cut-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z" fill="currentColor"/><path d="M14 2.2A9 9 0 0 1 21.8 10H14z" fill="currentColor" opacity=".45"/></svg>';
 const SAY_MARK = '<svg class="say-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
 function sizeCompare(info: BodyInfo): string {
@@ -116,6 +121,16 @@ export function createUI(h: Handlers) {
   function onTalkTap(e: Event) {
     const el = (e.target as HTMLElement).closest('.talk') as HTMLElement | null;
     if (!el || !info.contains(el)) return;
+    if (el.dataset.structure) {
+      speakingEl?.classList.remove('speaking');
+      speakingEl = el;
+      const opened = h.onStructure(() => {
+        el.classList.remove('speaking');
+        if (speakingEl === el) speakingEl = null;
+      });
+      el.classList.toggle('speaking', opened);
+      return;
+    }
     talk(el, el.dataset.say ?? el.textContent ?? '');
   }
   info.addEventListener('click', onTalkTap);
@@ -148,7 +163,12 @@ export function createUI(h: Handlers) {
       </div>
       <div class="info-body">
         <dl class="stats">
-          ${b.stats.map(([k, v]) => `<div class="talk" role="button" tabindex="0" data-say="${esc(NARRATION[b.id].stats[k] ?? `${k}: ${v}`)}">${SAY_MARK}<dt>${k}</dt><dd>${v}</dd></div>`).join('')}
+          ${b.stats.map(([k, v]) => {
+            const value = esc(v).replace(/\n/g, '<br>');
+            return k === STRUCTURE_LABEL
+              ? `<div class="talk structure" role="button" tabindex="0" data-structure="1">${CUT_MARK}<dt>${k}</dt><dd>${value}</dd><p class="cut-hint">натисни — і зазирни всередину</p></div>`
+              : `<div class="talk" role="button" tabindex="0" data-say="${esc(NARRATION[b.id].stats[k] ?? `${k}: ${v}`)}">${SAY_MARK}<dt>${k}</dt><dd>${value}</dd></div>`;
+          }).join('')}
         </dl>
         ${sizeCompare(b)}
         <section class="fact">

@@ -12,7 +12,7 @@ let enabled = true;
 let voice: SpeechSynthesisVoice | null = null;
 // One element reused for every phrase: iOS unlocks playback per element on the first tap.
 let audio: HTMLAudioElement | null = null;
-let finishCurrent: (() => void) | null = null;
+let finishCurrent: ((interrupted: boolean) => void) | null = null;
 
 function pickVoice() {
   if (!synth) return;
@@ -35,7 +35,7 @@ function stop() {
   synth?.cancel();
   const f = finishCurrent;
   finishCurrent = null;
-  f?.();
+  f?.(true);
 }
 
 export function setSpeechEnabled(on: boolean) {
@@ -45,32 +45,38 @@ export function setSpeechEnabled(on: boolean) {
 
 /**
  * Say a phrase, interrupting whatever is being said. Call from a tap/click handler (iOS needs a
- * user gesture). onDone runs when this phrase ends or is cut off. Returns false when muted.
+ * user gesture). onDone runs when this phrase ends (interrupted = false) or is cut off by another
+ * phrase or by muting (interrupted = true). Returns false when muted.
  */
-export function say(text: string, onDone?: () => void): boolean {
+export function say(text: string, onDone?: (interrupted: boolean) => void): boolean {
   if (!enabled) return false;
   stop();
 
   let done = false;
-  const finish = () => {
+  const finish = (interrupted = false) => {
     if (done) return;
     done = true;
     if (finishCurrent === finish) finishCurrent = null;
-    onDone?.();
+    onDone?.(interrupted);
   };
   finishCurrent = finish;
 
   const key = voiceKey(text);
   if (recorded.has(key)) {
     if (!audio) audio = new Audio();
-    audio.onended = finish;
+    audio.onended = () => finish();
     audio.onerror = () => {
       // recording missing or not playable: read it with the built-in voice instead
       if (!done) speakWithSynth(text, finish);
     };
     audio.src = `${import.meta.env.BASE_URL}voice/${key}.m4a`;
     const p = audio.play();
-    if (p) p.catch(() => undefined); // an interrupted play() rejects; nothing to do
+    if (p)
+      p.catch((err: DOMException) => {
+        // AbortError: another phrase replaced this one (already reported). Anything else, e.g. the
+        // browser refusing to play: report it as ended so a narration sequence keeps going.
+        if (err && err.name !== 'AbortError') finish();
+      });
     return true;
   }
   if (!synth) {
@@ -81,7 +87,7 @@ export function say(text: string, onDone?: () => void): boolean {
   return true;
 }
 
-function speakWithSynth(text: string, finish: () => void) {
+function speakWithSynth(text: string, finish: (interrupted?: boolean) => void) {
   if (!synth) return finish();
   if (!voice) pickVoice();
   const u = new SpeechSynthesisUtterance(text);
@@ -90,9 +96,9 @@ function speakWithSynth(text: string, finish: () => void) {
   // a brighter, livelier voice: higher pitch, normal tempo (slower sounds sleepy)
   u.rate = 1.0;
   u.pitch = VOICE_PITCH;
-  u.onend = finish;
-  u.onerror = finish;
+  u.onend = () => finish();
+  u.onerror = () => finish();
   // some Safari versions never fire onend: don't leave the block highlighted forever
-  setTimeout(finish, 1500 + text.length * 110);
+  setTimeout(() => finish(), 1500 + text.length * 110);
   synth.speak(u);
 }

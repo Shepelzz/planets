@@ -10,8 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BODIES } from '../src/data.ts';
-import { NARRATION } from '../src/narration.ts';
+import { spokenPhrases } from '../src/phrases.ts';
 import { VOICE_PITCH, voiceKey } from '../src/voiceKey.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,16 +19,7 @@ const tmp = join(root, 'node_modules', '.cache', 'voice');
 mkdirSync(outDir, { recursive: true });
 mkdirSync(tmp, { recursive: true });
 
-// Every phrase, exactly as the app passes it to say() (see ui.ts and main.ts).
-const phrases = new Set<string>();
-for (const b of BODIES) {
-  const n = NARRATION[b.id];
-  phrases.add(n.intro);
-  phrases.add(n.compare);
-  phrases.add(`${b.name}. ${b.kind}.`);
-  for (const [label] of b.stats) phrases.add(n.stats[label]);
-  for (const f of b.facts) phrases.add(f);
-}
+const phrases = new Set(spokenPhrases().map((p) => p.text));
 
 const keys: string[] = [];
 let made = 0;

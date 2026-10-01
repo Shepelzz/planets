@@ -6,6 +6,26 @@ import { loadTexture, SRGB_GLSL } from './textures';
 
 const DEG = Math.PI / 180;
 
+// Cut-away: a wedge between two half-planes through the centre (normals uCutA, uCutB) is not drawn,
+// so the layer faces (cutaway.ts) show through. The wedge lives in world space, facing the camera.
+export interface CutUniforms {
+  uCutOn: { value: number };
+  uCutA: { value: THREE.Vector3 };
+  uCutB: { value: THREE.Vector3 };
+}
+const CUT_GLSL = /* glsl */ `
+uniform float uCutOn;
+uniform vec3 uCutA;
+uniform vec3 uCutB;
+void cutAway(vec3 rel) {
+  if (uCutOn > 0.5 && dot(rel, uCutA) > 0.0 && dot(rel, uCutB) > 0.0) discard;
+}`;
+const makeCutUniforms = (): CutUniforms => ({
+  uCutOn: { value: 0 },
+  uCutA: { value: new THREE.Vector3(1, 0, 0) },
+  uCutB: { value: new THREE.Vector3(-1, 0, 0) },
+});
+
 export interface Body {
   info: BodyInfo;
   /** Positioned at the body's centre in world space, not rotated. */
@@ -19,6 +39,10 @@ export interface Body {
   orbitAngle: number;
   spinAngle: number;
   materials: THREE.ShaderMaterial[];
+  /** shared by the surface, cloud and Sun shaders */
+  cut: CutUniforms;
+  /** atmosphere glow, hidden while the planet is cut open */
+  atmosphere?: THREE.ShaderMaterial;
 }
 
 // set in createBodies: old devices get far fewer triangles (the maps carry the detail anyway)
@@ -54,6 +78,7 @@ varying vec2 vUv;
 ${NOISE_GLSL}
 ${BUMP_GLSL}
 ${SRGB_GLSL}
+${CUT_GLSL}
 ${surface}
 
 float ringShadow(vec3 pos, vec3 L) {
@@ -67,6 +92,7 @@ float ringShadow(vec3 pos, vec3 L) {
 }
 
 void main() {
+  cutAway(vWorldPos - uCenter);
   vec3 p = normalize(vObjPos);
   float h = 0.0, spec = 0.0;
   vec3 night = vec3(0.0);
@@ -105,10 +131,13 @@ void main() {
 const CLOUD_FRAG = /* glsl */ `
 uniform vec3 uSunPos;
 uniform sampler2D uClouds;
+uniform vec3 uCenter;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec2 vUv;
+${CUT_GLSL}
 void main() {
+  cutAway(vWorldPos - uCenter);
   float a = smoothstep(0.08, 0.95, texture2D(uClouds, vUv).r) * 0.95;
   vec3 N = normalize(vWorldNormal);
   vec3 L = normalize(uSunPos - vWorldPos);
@@ -196,13 +225,16 @@ const SUN_FRAG = /* glsl */ `
 uniform float uTime;
 uniform float uDetail;
 uniform sampler2D uMap;
+uniform vec3 uCenter;
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec2 vUv;
 ${NOISE_GLSL}
 ${SRGB_GLSL}
+${CUT_GLSL}
 void main() {
+  cutAway(vWorldPos - uCenter);
   vec3 p = normalize(vObjPos);
   float t = uTime * 0.04;
   // the real map plus a slowly boiling granulation on top
@@ -237,10 +269,17 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   const tilt = new THREE.Group();
   tilt.rotation.z = info.tilt * DEG;
   anchor.add(tilt);
+  const cut = makeCutUniforms();
   const mat = new THREE.ShaderMaterial({
     vertexShader: VERT,
     fragmentShader: SUN_FRAG,
-    uniforms: { uTime: { value: 0 }, uDetail: { value: lowDetail ? 0 : 1 }, uMap: { value: loadTexture(TEXTURE_FILES.sun) } },
+    uniforms: {
+      uTime: { value: 0 },
+      uDetail: { value: lowDetail ? 0 : 1 },
+      uMap: { value: loadTexture(TEXTURE_FILES.sun) },
+      uCenter: { value: anchor.position },
+      ...cut,
+    },
     toneMapped: false, // keep the Sun's colours saturated instead of ACES-washed white
   });
   const mesh = new THREE.Mesh(sphereGeo, mat);
@@ -262,7 +301,7 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   anchor.userData.halo = outer;
   scene.add(anchor);
 
-  return { info, anchor, tilt, mesh, viewRadius: info.radius * 1.4, orbitAngle: 0, spinAngle: 0, materials: [mat] };
+  return { info, anchor, tilt, mesh, viewRadius: info.radius * 1.4, orbitAngle: 0, spinAngle: 0, materials: [mat], cut };
 }
 
 function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
@@ -273,7 +312,9 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
   const materials: THREE.ShaderMaterial[] = [];
 
   const hasRings = !!info.rings;
+  const cut = makeCutUniforms();
   const uniforms = {
+    ...cut,
     uSunPos: { value: new THREE.Vector3() },
     uTime: { value: 0 },
     uRadius: { value: info.radius },
@@ -300,7 +341,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     const cm = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: CLOUD_FRAG,
-      uniforms: { uSunPos: uniforms.uSunPos, uClouds: { value: loadTexture('earth_clouds.jpg') } },
+      uniforms: { uSunPos: uniforms.uSunPos, uClouds: { value: loadTexture('earth_clouds.jpg') }, uCenter: { value: anchor.position }, ...cut },
       transparent: true,
       depthWrite: false,
     });
@@ -310,6 +351,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     tilt.add(clouds);
   }
 
+  let atmosphere: THREE.ShaderMaterial | undefined;
   if (info.atmosphere) {
     const a = info.atmosphere;
     const am = new THREE.ShaderMaterial({
@@ -328,6 +370,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
       blending: THREE.AdditiveBlending,
     });
     materials.push(am);
+    atmosphere = am;
     const shell = new THREE.Mesh(sphereGeo, am);
     shell.scale.setScalar(info.radius * a.scale);
     anchor.add(shell);
@@ -361,7 +404,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
   }
 
   scene.add(anchor);
-  return { info, anchor, tilt, mesh, clouds, viewRadius, orbitAngle: info.startAngle, spinAngle: 0, materials };
+  return { info, anchor, tilt, mesh, clouds, viewRadius, orbitAngle: info.startAngle, spinAngle: 0, materials, cut, atmosphere };
 }
 
 export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {

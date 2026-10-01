@@ -6,6 +6,7 @@ import { createBodies, createOrbitLines, updateBodies, type Body } from './bodie
 import type { BodyId } from './data';
 import { createSky } from './sky';
 import { createUI } from './ui';
+import { Cutaway } from './cutaway';
 import { loadingManager, useLiteTextures } from './textures';
 import { renderThumbnails } from './thumbnails';
 import { NARRATION } from './narration';
@@ -55,6 +56,12 @@ const bodies = createBodies(scene, lowEnd);
 const lines = createOrbitLines(scene, bodies);
 const byId = new Map(bodies.map((b) => [b.info.id, b]));
 const sunBody = byId.get('sun')!;
+
+// textbook cut-away of the focused body ("З чого складається" block)
+const cutLabels = document.createElement('div');
+cutLabels.id = 'cut-labels';
+document.body.appendChild(cutLabels);
+const cutaway = new Cutaway(scene, camera, cutLabels);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
@@ -148,6 +155,7 @@ function focusOffset(b: Body) {
 }
 
 function flyTo(b: Body | null, duration?: number) {
+  cutaway.close();
   if (b) say(NARRATION[b.info.id].intro);
   ui.setSelected(b ? b.info.id : null); // first, so the panel's size is known for framing
   flight = {
@@ -278,6 +286,15 @@ const ui = createUI({
     playing = !playing;
     ui.setPlaying(playing);
   },
+  onStructure: (onEnd) => {
+    if (!focus) return false;
+    if (cutaway.isOpen(focus)) {
+      cutaway.close();
+      return false;
+    }
+    cutaway.open(focus, onEnd);
+    return true;
+  },
 });
 ui.setPlaying(playing);
 
@@ -381,6 +398,7 @@ function frame(now: number) {
   if (playing) simTime += dt;
   updateBodies(bodies, playing ? dt : 0, simTime, lines);
   updateFlight(Math.min(rawDt, 0.5)); // flights run on wall-clock time even when frames stutter
+  cutaway.update(Math.min(rawDt, 0.1));
   followFocus();
   // during a flight the camera is ours: OrbitControls would clamp it to the old planet's zoom limits
   if (!flight) controls.update();

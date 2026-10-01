@@ -345,6 +345,37 @@ body.no-labels #labels { display: none; }
 }
 .next-fact:active { transform: scale(0.95); }
 
+/* the "what's inside" block opens the cut-away */
+.stats > .structure {
+  background: linear-gradient(135deg, rgba(217, 98, 43, 0.28), rgba(242, 163, 58, 0.16));
+  box-shadow: 0 0 0 1px rgba(242, 163, 58, 0.35) inset;
+}
+.stats > .structure .cut-mark { color: var(--accent); opacity: 1; width: 16px; height: 16px; }
+.cut-hint { margin: 4px 0 0; font-size: 11px; font-weight: 600; color: var(--accent); }
+
+/* layer names next to the cut faces */
+#cut-labels { position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: 2; }
+.cut-label { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity 0.4s ease; }
+.cut-label.show { opacity: 1; }
+.cut-label-inner {
+  position: absolute;
+  right: -7px;
+  top: 0;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 4px 6px 4px 11px;
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.75);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.cut-label-inner i { width: 12px; height: 12px; margin-left: 8px; border-radius: 50%; border: 2px solid #fff; }
+.cut-label.current .cut-label-inner { background: var(--accent); color: #2a1d05; }
+
 /* blocks that talk when tapped */
 .talk { position: relative; cursor: pointer; transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease; -webkit-user-select: none; user-select: none; }
 .stats > .talk:active, .compare.talk:active { transform: scale(0.97); }

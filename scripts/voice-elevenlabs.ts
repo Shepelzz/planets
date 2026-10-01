@@ -22,8 +22,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BODIES } from '../src/data.ts';
 import { NARRATION } from '../src/narration.ts';
+import { spokenPhrases } from '../src/phrases.ts';
 import { voiceKey } from '../src/voiceKey.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,19 +68,7 @@ const config = JSON.parse(readFileSync(join(root, 'scripts', 'elevenlabs-config.
 const model = process.env.ELEVENLABS_MODEL || config.model;
 const args = process.argv.slice(2);
 
-/** Every phrase the app says, most important first (intros and headers before long facts). */
-function phrasesByPriority(): { text: string; what: string }[] {
-  const out: { text: string; what: string }[] = [];
-  const add = (text: string, what: string) => {
-    if (!out.some((p) => p.text === text)) out.push({ text, what });
-  };
-  for (const b of BODIES) add(NARRATION[b.id].intro, `${b.name}: вступ`);
-  for (const b of BODIES) add(`${b.name}. ${b.kind}.`, `${b.name}: заголовок картки`);
-  for (const b of BODIES) for (const [label] of b.stats) add(NARRATION[b.id].stats[label], `${b.name}: блок «${label}»`);
-  for (const b of BODIES) add(NARRATION[b.id].compare, `${b.name}: порівняння із Землею`);
-  for (const b of BODIES) b.facts.forEach((f, i) => add(f, `${b.name}: факт ${i + 1}`));
-  return out;
-}
+const phrasesByPriority = spokenPhrases;
 
 class QuotaError extends Error {}
 
