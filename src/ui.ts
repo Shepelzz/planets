@@ -345,6 +345,13 @@ export function createUI(h: Handlers) {
 
   btnMotion.addEventListener('click', h.onTogglePlay);
   btnOverview.addEventListener('click', h.onOverview);
+  // the title at the top left is also the way back to the whole system (a real link to /solar-system)
+  document.querySelector('.brand')!.addEventListener('click', (e) => {
+    const m = e as MouseEvent;
+    if (m.metaKey || m.ctrlKey || m.shiftKey) return; // open in a new tab as usual
+    e.preventDefault();
+    h.onOverview();
+  });
   btnLabels.addEventListener('click', toggleLabels);
   btnSound.addEventListener('click', toggleSound);
 

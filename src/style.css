@@ -84,7 +84,10 @@ button {
   font-weight: 700;
   font-size: 16px;
   letter-spacing: 0.01em;
+  color: inherit;
+  text-decoration: none;
 }
+.brand:active { transform: scale(0.97); }
 .brand-dot {
   margin-right: 10px;
   width: 22px;
