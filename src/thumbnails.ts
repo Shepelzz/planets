@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import type { BodyId } from './data';
-import { TEXTURE_FILES } from './surfaces';
+import { CHARON_TINT_GLSL, TEXTURE_FILES, UNSEEN_FILL_GLSL } from './surfaces';
 import { loadTexture, SRGB_GLSL } from './textures';
 
 const THUMB_VERT = /* glsl */ `
 varying vec2 vUv;
 varying vec3 vNormal;
+varying vec3 vObj;
 void main() {
   vUv = uv;
+  vObj = position;
   vNormal = normalize(mat3(modelMatrix) * normal);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
@@ -17,11 +19,18 @@ uniform sampler2D uMap;
 uniform sampler2D uClouds;
 uniform float uHasClouds;
 uniform float uEmissive;
+uniform float uKind; // 1 = Pluto (fill the unseen south), 2 = Charon (fill + tint the grey map)
 varying vec2 vUv;
 varying vec3 vNormal;
+varying vec3 vObj;
 ${SRGB_GLSL}
+${UNSEEN_FILL_GLSL}
+${CHARON_TINT_GLSL}
 void main() {
-  vec3 albedo = srgbToLinear(texture2D(uMap, vUv).rgb);
+  vec3 raw = texture2D(uMap, vUv).rgb;
+  if (uKind > 0.5) raw = fillUnseen(uMap, vUv, raw);
+  if (uKind > 1.5) raw = charonColour(raw, normalize(vObj));
+  vec3 albedo = srgbToLinear(raw);
   if (uHasClouds > 0.5) albedo = mix(albedo, vec3(1.0), texture2D(uClouds, vUv).r);
   // light from the upper left, matching the 3D scene's three-quarter view
   float light = max(dot(normalize(vNormal), normalize(vec3(-4.0, 2.5, 5.0))), 0.0) + 0.04;
@@ -53,6 +62,7 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
       uClouds: { value: loadTexture('earth_clouds.jpg') },
       uHasClouds: { value: 0 },
       uEmissive: { value: 0 },
+      uKind: { value: 0 },
     },
   });
   const ball = new THREE.Mesh(geo, mat);
@@ -64,8 +74,10 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
     mat.uniforms.uMap.value = loadTexture(TEXTURE_FILES[id as keyof typeof TEXTURE_FILES]);
     mat.uniforms.uHasClouds.value = id === 'earth' ? 1 : 0;
     mat.uniforms.uEmissive.value = id === 'sun' ? 1 : 0;
-    // show the interesting side: the Americas for Earth (u=0.25 faces +z), the near side for the Moon
-    ball.rotation.set(0.25, id === 'earth' ? 0.2 : id === 'moon' ? -Math.PI / 2 : 0.4, 0);
+    mat.uniforms.uKind.value = id === 'pluto' ? 1 : id === 'charon' ? 2 : 0;
+    // show the interesting side: the Americas for Earth (u=0.25 faces +z), the near side for the
+    // Moon and Pluto's heart (both around u=0.5)
+    ball.rotation.set(0.25, id === 'earth' ? 0.2 : id === 'moon' || id === 'pluto' ? -Math.PI / 2 : 0.4, 0);
     renderer.render(scene, camera);
     out[id] = canvas.toDataURL('image/png');
   }

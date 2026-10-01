@@ -414,6 +414,18 @@ export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
   return BODIES.map((info) => (info.id === 'sun' ? makeSun(info, scene) : makePlanet(info, scene)));
 }
 
+/**
+ * Position on a circular orbit relative to its centre. Planets move in the x–z plane; an inclined
+ * orbit (Pluto, 17°) is tipped about the x axis; moons wobble a little above and below their planet.
+ */
+function orbitOffset(info: BodyInfo, angle: number, out: THREE.Vector3) {
+  const d = info.orbit;
+  const along = Math.sin(angle) * d;
+  const inc = (info.inclination ?? 0) * DEG;
+  const wobble = info.parent ? Math.sin(angle) * 0.09 * d : 0;
+  return out.set(Math.cos(angle) * d, along * Math.sin(inc) + wobble, -along * Math.cos(inc));
+}
+
 export function createOrbitLines(scene: THREE.Scene, bodies: Body[]): Map<string, THREE.LineLoop> {
   const lines = new Map<string, THREE.LineLoop>();
   for (const b of bodies) {
@@ -422,7 +434,7 @@ export function createOrbitLines(scene: THREE.Scene, bodies: Body[]): Map<string
     const n = 512;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(a) * b.info.orbit, 0, -Math.sin(a) * b.info.orbit));
+      pts.push(orbitOffset({ ...b.info, parent: undefined }, a, new THREE.Vector3()));
     }
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({ color: 0x8fb4ff, transparent: true, opacity: 0.16, depthWrite: false });
@@ -448,20 +460,12 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const i = b.info;
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
-    const tiltY = parent ? Math.sin(b.orbitAngle) * 0.09 : 0;
-    b.anchor.position.set(
-      origin.x + Math.cos(b.orbitAngle) * i.orbit,
-      origin.y + tiltY * i.orbit,
-      origin.z - Math.sin(b.orbitAngle) * i.orbit,
-    );
-    // the Moon keeps one face towards Earth
-    b.mesh.rotation.y = i.id === 'moon' ? b.orbitAngle + Math.PI : b.spinAngle;
+    b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position)).add(origin);
+    // moons (the Moon, Charon) keep one face towards their planet
+    b.mesh.rotation.y = parent ? b.orbitAngle + Math.PI : b.spinAngle;
     if (b.clouds) b.clouds.rotation.y = b.spinAngle * 1.08;
     for (const m of b.materials) if (m.uniforms.uTime) m.uniforms.uTime.value = time;
-    if (i.id === 'moon' && parent) {
-      const line = lines.get('moon');
-      line?.position.copy(parent.anchor.position);
-    }
+    if (parent) lines.get(i.id)?.position.copy(parent.anchor.position);
   }
   for (const b of bodies) {
     b.tilt.updateMatrixWorld(true);

@@ -184,7 +184,7 @@ export function createUI(h: Handlers) {
           </div>
         </section>
       </div>
-      <p class="credit">Мапи планет: <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> (CC BY 4.0) за даними NASA</p>`;
+      <p class="credit">Мапи планет: <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> (CC BY 4.0) за даними NASA; Плутон і Харон — NASA / New Horizons</p>`;
     info.querySelector('.close')!.addEventListener('click', () => {
       infoWanted = false;
       renderInfo();

@@ -2,7 +2,7 @@ import type { SurfaceKind } from './surfaces';
 
 export type BodyId =
   | 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
-  | 'jupiter' | 'saturn' | 'uranus' | 'neptune';
+  | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon';
 
 export interface Atmosphere {
   color: [number, number, number];
@@ -28,6 +28,8 @@ export interface BodyInfo {
   spinSeconds: number; // one rotation (retrograde spin comes from tilt > 90°)
   tilt: number; // axial tilt, degrees
   startAngle: number;
+  /** orbit tilted out of the planets' plane, degrees (Pluto) */
+  inclination?: number;
   surface?: SurfaceKind;
   atmosphere?: Atmosphere;
   clouds?: boolean;
@@ -337,6 +339,65 @@ export const BODIES: BodyInfo[] = [
     startAngle: 4.6,
     surface: 'neptune',
     atmosphere: { color: [0.4, 0.62, 1.0], scale: 1.04, intensity: 1.0 },
+  },
+  {
+    id: 'pluto',
+    name: 'Плутон',
+    kind: 'Карликова планета',
+    icon: 'radial-gradient(circle at 35% 35%, #f6e7d6 0%, #c9a588 50%, #6b4a3a 100%)',
+    diameterKm: 2377,
+    stats: [
+      ['Діаметр', '2 377 км'],
+      ['Від Сонця', '5,9 млрд км'],
+      ['Доба і рік', 'доба — 6,4 дня\nрік — 248 років'],
+      ['Супутники', '5 — найбільший Харон'],
+      ['Температура', 'близько −230 °C'],
+      ['З чого складається', 'лід, океан, каміння'],
+    ],
+    facts: [
+      'До 2006 року Плутон вважали дев’ятою планетою. Потім учені вирішили, що він замалий, і назвали його карликовою планетою.',
+      'На Плутоні є величезне світле «сердечко» — рівнина із замерзлого азоту.',
+      'Плутон менший навіть за наш Місяць!',
+      'Назву Плутону придумала одинадцятирічна дівчинка з Англії — Венеція Берні.',
+      'Космічний апарат New Horizons летів до Плутона майже десять років і 2015 року вперше його сфотографував зблизька.',
+    ],
+    radius: size(0.187),
+    orbit: 490,
+    orbitSeconds: YEAR * 248,
+    spinSeconds: 30, // turns with Charon: they always face each other
+    tilt: 119.6,
+    startAngle: 5.5,
+    inclination: 17,
+    surface: 'pluto',
+    atmosphere: { color: [0.5, 0.66, 1.0], scale: 1.035, intensity: 0.5 }, // the thin blue haze New Horizons saw
+  },
+  {
+    id: 'charon',
+    name: 'Харон',
+    kind: 'Супутник Плутона',
+    icon: 'radial-gradient(circle at 35% 35%, #e9e6e2 0%, #9d9893 55%, #4c4846 100%)',
+    diameterKm: 1212,
+    stats: [
+      ['Діаметр', '1 212 км'],
+      ['Від Плутона', '19 600 км\nоблітає його за 6,4 дня'],
+      ['Температура', 'близько −220 °C'],
+      ['Відкрили', '1978 року'],
+      ['З чого складається', 'лід і каміння'],
+    ],
+    facts: [
+      'Харон такий великий поруч із Плутоном, що вони кружляють навколо спільної точки між ними — ніби тримаються за руки й танцюють.',
+      'Плутон і Харон завжди дивляться одне на одного одним і тим самим боком.',
+      'На північному полюсі Харона є руда пляма. Учені назвали її Мордор — як чарівну країну з книжки «Володар перснів».',
+      'Харона назвали на честь човняра з давньогрецьких міфів, який перевозив мандрівників через річку.',
+    ],
+    radius: size(0.095),
+    orbit: 14,
+    orbitSeconds: 30,
+    spinSeconds: 30, // tidally locked: same as its orbit
+    tilt: 0,
+    startAngle: 2.0,
+    surface: 'charon',
+    parent: 'pluto',
   },
 ];
 

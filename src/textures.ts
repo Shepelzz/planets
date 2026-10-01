@@ -5,7 +5,7 @@ const loader = new THREE.TextureLoader(loadingManager);
 const cache = new Map<string, THREE.Texture>();
 
 // 2K copies of the 4K maps, for old WebGL 1 devices (e.g. 1 GB iPads on iOS 12).
-const LITE_FILES = new Set(['earth_day.jpg', 'earth_clouds.jpg', 'moon.jpg', 'mars.jpg', 'jupiter.jpg', 'milky_way.jpg']);
+const LITE_FILES = new Set(['earth_day.jpg', 'earth_clouds.jpg', 'moon.jpg', 'mars.jpg', 'jupiter.jpg', 'milky_way.jpg', 'pluto.jpg']);
 let lite = false;
 
 /** Call before any texture is requested. */
