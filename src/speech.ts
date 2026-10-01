@@ -24,6 +24,9 @@ let audio: HTMLAudioElement | null = null;
 export type SpeechEnd = 'ended' | 'replaced' | 'muted';
 
 let finishCurrent: ((how: SpeechEnd) => void) | null = null;
+/** the phrase being said right now, and who waits for its end */
+let currentText: string | null = null;
+let currentListeners: ((how: SpeechEnd) => void)[] = [];
 
 function pickVoice() {
   if (!synth) return;
@@ -130,6 +133,7 @@ function stop(how: SpeechEnd) {
   synth?.cancel();
   const f = finishCurrent;
   finishCurrent = null;
+  currentText = null;
   f?.(how);
 }
 
@@ -144,20 +148,32 @@ export function setSpeechEnabled(on: boolean) {
 /**
  * Say a phrase, interrupting whatever is being said. Call from a tap/click handler (iOS needs a
  * user gesture). onDone tells how the phrase ended (see SpeechEnd). Returns false when muted.
+ * Asking for the phrase that is already being said doesn't start it over: it just goes on.
  */
 export function say(text: string, onDone?: (how: SpeechEnd) => void): boolean {
   if (!enabled) return false;
+  if (finishCurrent && currentText === text) {
+    if (onDone) currentListeners.push(onDone);
+    keepOutputAwake();
+    return true;
+  }
   stop('replaced');
   keepOutputAwake();
 
   let done = false;
+  const listeners = onDone ? [onDone] : [];
   const finish = (how: SpeechEnd = 'ended') => {
     if (done) return;
     done = true;
-    if (finishCurrent === finish) finishCurrent = null;
-    onDone?.(how);
+    if (finishCurrent === finish) {
+      finishCurrent = null;
+      currentText = null;
+    }
+    for (const l of listeners) l(how);
   };
   finishCurrent = finish;
+  currentText = text;
+  currentListeners = listeners;
 
   const key = voiceKey(text);
   if (recorded.has(key)) {
