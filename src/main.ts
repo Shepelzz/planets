@@ -256,17 +256,28 @@ function pick(px: number, py: number): Body | null {
 }
 
 let down: { x: number; y: number; t: number } | null = null;
+// a pinch is not a tap: remember if a second finger touched during the gesture
+const pointersDown = new Set<number>();
+let multiTouch = false;
 canvas.addEventListener('pointerdown', (e) => {
+  pointersDown.add(e.pointerId);
+  if (pointersDown.size > 1) multiTouch = true;
+  else multiTouch = false;
   down = { x: e.clientX, y: e.clientY, t: performance.now() };
 });
+const pointerGone = (e: PointerEvent) => pointersDown.delete(e.pointerId);
+canvas.addEventListener('pointercancel', pointerGone);
 canvas.addEventListener('pointerup', (e) => {
-  if (!down) return;
+  pointerGone(e);
+  if (!down || multiTouch) return;
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
   const quick = performance.now() - down.t < 450;
   down = null;
-  if (moved > 10 || !quick) return;
+  if (moved > 10 || !quick) return; // a drag that turned the camera
   const b = pick(e.clientX, e.clientY);
-  if (b && b !== focus) flyTo(b);
+  if (!b) ui.hideInfo(); // tap on empty space puts the card away
+  else if (b === focus) ui.showInfo();
+  else flyTo(b);
 });
 // stop Safari's page pinch-zoom from fighting the 3D pinch
 document.addEventListener('gesturestart', (e) => e.preventDefault());

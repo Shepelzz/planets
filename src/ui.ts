@@ -378,6 +378,12 @@ export function createUI(h: Handlers) {
       infoWanted = true;
       renderInfo();
     },
+    /** Tap on empty space: put the card away (tapping the planet again brings it back). */
+    hideInfo() {
+      if (!current || !infoWanted) return;
+      infoWanted = false;
+      renderInfo();
+    },
     toggleLabels,
     toggleSound,
   };
