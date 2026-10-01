@@ -345,13 +345,11 @@ body.no-labels #labels { display: none; }
 }
 .next-fact:active { transform: scale(0.95); }
 
-/* the "what's inside" block opens the cut-away */
-.stats > .structure {
-  background: linear-gradient(135deg, rgba(217, 98, 43, 0.28), rgba(242, 163, 58, 0.16));
-  box-shadow: 0 0 0 1px rgba(242, 163, 58, 0.35) inset;
-}
-.stats > .structure .cut-mark { color: var(--accent); opacity: 1; width: 16px; height: 16px; }
-.cut-hint { margin: 4px 0 0; font-size: 11px; font-weight: 600; color: var(--accent); }
+/* the "what's inside" block opens the cut-away; at rest it looks like the other blocks (only the
+   icon and the hint differ), so it never seems already switched on */
+.stats > .structure .cut-mark { width: 16px; height: 16px; }
+.cut-hint { margin: 4px 0 0; font-size: 11px; font-weight: 600; color: var(--muted); }
+.stats > .structure.speaking .cut-hint { color: var(--accent); }
 
 /* layer names next to the cut faces */
 #cut-labels { position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: 2; }
