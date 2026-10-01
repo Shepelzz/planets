@@ -203,6 +203,9 @@ export function createUI(h: Handlers) {
   let current: BodyInfo | null = null;
   let factIndex = 0;
   let infoWanted = true;
+  // The card for a body chosen from the dock waits, invisible, until the camera arrives (revealInfo),
+  // then slides in. It already takes its place, so the flight frames the body beside it.
+  let infoPending = false;
 
   function renderInfo() {
     if (!current) {
@@ -217,6 +220,7 @@ export function createUI(h: Handlers) {
       ...(st ? [st.intro, ...st.layers.map((l) => l.text)] : []),
     ]);
     info.hidden = !infoWanted;
+    info.classList.toggle('pending', infoPending && infoWanted);
     info.innerHTML = `
       <button class="close" aria-label="${UI.close}">${ICONS.close}</button>
       <div class="info-head">
@@ -248,6 +252,7 @@ export function createUI(h: Handlers) {
       <p class="credit">${esc(UI.credit)}</p>`;
     info.querySelector('.close')!.addEventListener('click', () => {
       infoWanted = false;
+      infoPending = false;
       renderInfo();
     });
     info.querySelector('.next-fact')!.addEventListener('click', () => {
@@ -364,8 +369,16 @@ export function createUI(h: Handlers) {
       renderInfo();
       info.scrollTop = scrollTop;
     },
-    setSelected(id: BodyId | null) {
+    /**
+     * The body we are going to (null: the whole system). card: 'later' — the card opens once we
+     * arrive (revealInfo); 'hidden' — no card (a tap on the body in the scene; tapping it again opens it).
+     */
+    setSelected(id: BodyId | null, card: 'later' | 'hidden' = 'later') {
       const next = id ? BODIES.find((b) => b.id === id)! : null;
+      if (next) {
+        infoWanted = card === 'later';
+        infoPending = card === 'later';
+      }
       const dockId = next ? next.parent ?? next.id : null; // a moon lights up its planet
       for (const [cid, chip] of chips) chip.classList.toggle('selected', cid === dockId);
       if (dockId) {
@@ -385,20 +398,29 @@ export function createUI(h: Handlers) {
     },
     toggleInfo() {
       if (!current) return;
-      infoWanted = !infoWanted;
+      infoWanted = !infoWanted || infoPending;
+      infoPending = false;
       renderInfo();
     },
     /** Reopen the story card after it was closed (tapping the selected planet again). */
     showInfo() {
-      if (!current || infoWanted) return;
+      if (!current || (infoWanted && !infoPending)) return;
       infoWanted = true;
+      infoPending = false;
       renderInfo();
     },
     /** Tap on empty space: put the card away (tapping the planet again brings it back). */
     hideInfo() {
       if (!current || !infoWanted) return;
       infoWanted = false;
+      infoPending = false;
       renderInfo();
+    },
+    /** The camera has arrived: let a waiting card slide in. */
+    revealInfo() {
+      if (!infoPending) return;
+      infoPending = false;
+      info.classList.remove('pending');
     },
     toggleLabels,
     toggleSound,

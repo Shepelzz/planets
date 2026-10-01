@@ -264,6 +264,9 @@ body.no-labels #labels { display: none; }
   user-select: text;
 }
 #info[hidden] { display: none; }
+/* waiting for the camera to arrive: keeps its place (for framing), not shown; removing the class
+   restarts the slide-in animation */
+#info.pending { visibility: hidden; animation: none; }
 @keyframes panel-in {
   from { opacity: 0; transform: translateX(24px); }
 }

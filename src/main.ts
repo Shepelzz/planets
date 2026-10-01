@@ -101,17 +101,22 @@ window.addEventListener('resize', resize);
 resize();
 
 // ---------- going somewhere ----------
-/** Fly to a body (null: the whole system): address, card, narration, maps, then the camera. */
-function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 'none' = 'push') {
+/**
+ * Fly to a body (null: the whole system): address, card, narration, maps, then the camera.
+ * card: 'later' — its card slides in when we arrive (chosen from the dock, a link…); 'hidden' — no
+ * card (the body was tapped in the scene: tapping it again opens the card).
+ */
+function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 'none' = 'push', card: 'later' | 'hidden' = 'later') {
   showAddress(b ? { id: b.info.id, name: b.info.name } : null, address);
   cutaway.close();
   if (b?.station) loadRealStation(b); // fetch the detailed model while we fly
   // the 4K map of where we are going (for the ISS: Earth below it)
   showDetail(b?.station ? byId.get(b.info.parent!)! : b);
   if (b) say(NARRATION[b.info.id].intro);
-  ui.setSelected(b ? b.info.id : null); // before the camera: the panel's size changes the framing
+  ui.setSelected(b ? b.info.id : null, card); // before the camera: the panel's place changes the framing
   director.flyTo(b, duration);
 }
+director.onArrive = () => ui.revealInfo();
 const bodyFromPath = () => byId.get(pathSegment() as BodyId) ?? null;
 onAddressChange(() => flyTo(bodyFromPath(), undefined, 'none'));
 
@@ -120,12 +125,12 @@ listenForTaps(canvas, (x, y) => {
   const b = pickBody(camera, bodies, x, y);
   if (!b) ui.hideInfo(); // tap on empty space puts the card away
   else if (b === director.focus) ui.showInfo();
-  else flyTo(b);
+  else flyTo(b, undefined, 'push', 'hidden'); // just go there; the card waits for a second tap
 });
 // stop Safari's page pinch-zoom from fighting the 3D pinch
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
-const labels = createLabels(document.getElementById('labels')!, camera, bodies, (b) => flyTo(b));
+const labels = createLabels(document.getElementById('labels')!, camera, bodies, (b) => flyTo(b, undefined, 'push', 'hidden'));
 
 // ---------- UI ----------
 let playing = true;

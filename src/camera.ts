@@ -25,6 +25,8 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 
 export class CameraDirector {
   /** the body we look at; null = the whole system */
   focus: Body | null = null;
+  /** called when a flight ends */
+  onArrive: ((b: Body | null) => void) | null = null;
   private flight: Flight | null = null;
   private lastFocusPos = new THREE.Vector3();
   private lastFocusQuat = new THREE.Quaternion();
@@ -147,6 +149,7 @@ export class CameraDirector {
       this.flight = null;
       controls.enabled = true;
       this.configureLimits();
+      this.onArrive?.(flight.to);
     }
     if (this.focus) {
       this.lastFocusPos.copy(this.focus.anchor.position);
