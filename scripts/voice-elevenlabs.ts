@@ -16,7 +16,8 @@
 // run it again later (or with another key) to continue. Phrases not recorded yet keep their macOS
 // (Lesya) recording.
 //
-// Output is the same as scripts/build-voice.ts: public/voice/<key>.m4a + src/voice-manifest.json.
+// Output is the same as scripts/build-voice.ts: public/voice/<key>.m4a + src/voice-manifest.json
+// (refreshed at the end, so re-recorded files get new fingerprints and browsers fetch them anew).
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -26,6 +27,7 @@ import { spokenPhrases } from '../src/phrases.ts';
 import * as content from './content.ts';
 const { NARRATION } = content;
 import { voiceKey } from '../src/voiceKey.ts';
+import { writeVoiceManifest } from './voice-manifest.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const API = 'https://api.elevenlabs.io/v1';
@@ -182,6 +184,8 @@ if (args[0] === '--samples') {
     if (e instanceof QuotaError) console.log(`\nquota used up, stopping here (${e.message})`);
     else throw e;
   } finally {
+    // phrases recorded by now: their files changed, so do their fingerprints
+    writeVoiceManifest(root, phrases.map((p) => voiceKey(p.text)).filter((k) => existsSync(join(outDir, `${k}.m4a`))));
     report(progress, phrases);
   }
 }

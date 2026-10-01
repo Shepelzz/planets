@@ -4,15 +4,17 @@
 //   npm run voice        (macOS only; re-run after changing texts.yaml)
 //
 // Files are keyed by text only: after changing VOICE_PITCH, delete public/voice/ to re-record all.
-// Output: public/voice/<key>.m4a (AAC, plays in Safari 12) and src/voice-manifest.json (list of keys).
+// Output: public/voice/<key>.m4a (AAC, plays in Safari 12) and src/voice-manifest.json (key →
+// fingerprint of the file, see scripts/voice-manifest.ts).
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spokenPhrases } from '../src/phrases.ts';
 import * as content from './content.ts';
 import { VOICE_PITCH, voiceKey } from '../src/voiceKey.ts';
+import { writeVoiceManifest } from './voice-manifest.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'public', 'voice');
@@ -48,5 +50,5 @@ for (const f of readdirSync(outDir)) {
   }
 }
 
-writeFileSync(join(root, 'src', 'voice-manifest.json'), JSON.stringify(keys.sort()) + '\n');
+writeVoiceManifest(root, keys);
 console.log(`${phrases.size} phrases: ${made} recorded, ${phrases.size - made} unchanged, ${removed} removed`);

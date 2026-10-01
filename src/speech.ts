@@ -13,7 +13,8 @@
 import manifest from './voice-manifest.json';
 import { VOICE_PITCH, voiceKey } from './voiceKey';
 
-const recorded = new Set<string>(manifest);
+/** recorded phrase key → fingerprint of its file (changes when the phrase is re-recorded) */
+const recorded = new Map<string, string>(Object.entries(manifest as Record<string, string>));
 const synth: SpeechSynthesis | undefined = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
 let enabled = true;
 let voice: SpeechSynthesisVoice | null = null;
@@ -40,7 +41,8 @@ if (synth) {
 export const speechSupported = recorded.size > 0 || !!synth;
 
 // ---------- recordings kept in memory ----------
-const fileUrl = (key: string) => `${import.meta.env.BASE_URL}voice/${key}.m4a`;
+// the fingerprint in the URL: a re-recorded phrase is a new URL, so no browser keeps the old take
+const fileUrl = (key: string) => `${import.meta.env.BASE_URL}voice/${key}.m4a?v=${recorded.get(key)}`;
 /** key → object URL of the downloaded recording, oldest first */
 const ready = new Map<string, string>();
 const queue: string[] = [];
