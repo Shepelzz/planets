@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Body } from './bodies';
-import { say } from './speech';
+import { say, type SpeechEnd } from './speech';
 import { STRUCTURE } from './structure';
 
 // Textbook-style cut-away: a wedge facing the camera opens like a book, the two cut faces show the
@@ -13,6 +13,7 @@ const CLOSE_SECONDS = 1.1;
 const HOLD_AFTER_STORY = 2;
 const HOLD_AFTER_INTERRUPT = 0.4;
 const HOLD_WITHOUT_SOUND = 10;
+const STAY_OPEN = Infinity; // muted mid-story: keep the slice until another block or planet is chosen
 const FULL_ANGLE = Math.PI / 4; // half-angle of the removed wedge when fully open (a 90° slice)
 
 const FACE_VERT = /* glsl */ `
@@ -141,6 +142,8 @@ export class Cutaway {
       sequence: ++this.sequence,
       onEnd,
     };
+    const glow = body.anchor.userData.glow as THREE.Sprite | undefined;
+    if (glow) glow.visible = false; // the Sun's bright glow would wash over the cut faces
     if (body.atmosphere) {
       active.atmosphereIntensity = body.atmosphere.uniforms.uIntensity.value;
       body.atmosphere.uniforms.uIntensity.value = 0;
@@ -152,12 +155,26 @@ export class Cutaway {
     this.tell(active, s.intro, s.layers.map((l) => l.text));
   }
 
+  /** Fold the slice shut with the closing animation (another block on the card was tapped). */
+  fold() {
+    const a = this.active;
+    if (!a || a.closing) return;
+    a.sequence = ++this.sequence; // stop the story
+    this.material.uniforms.uHighlight.value = -1;
+    a.closeAt = this.time;
+    const cb = a.onEnd;
+    a.onEnd = undefined;
+    cb?.();
+  }
+
   close() {
     const a = this.active;
     if (!a) return;
     this.active = null;
     this.sequence++;
     a.body.cut.uCutOn.value = 0;
+    const glow = a.body.anchor.userData.glow as THREE.Sprite | undefined;
+    if (glow) glow.visible = true;
     if (a.body.atmosphere && a.atmosphereIntensity !== undefined) a.body.atmosphere.uniforms.uIntensity.value = a.atmosphereIntensity;
     for (const f of this.faces) f.visible = false;
     for (const el of a.labels) el.remove();
@@ -187,10 +204,13 @@ export class Cutaway {
       this.material.uniforms.uHighlight.value = count - 1 - i; // shader counts from the centre
       a.labels.forEach((el, j) => el.classList.toggle('current', j === i));
       a.labels[i].classList.add('show');
-      const spoke = say(texts[i], (interrupted) => (interrupted ? finish(HOLD_AFTER_INTERRUPT) : step(i + 1)));
+      const spoke = say(texts[i], (how) => next(how, i + 1));
       if (!spoke) finish(HOLD_WITHOUT_SOUND);
     };
-    const spoke = say(intro, (interrupted) => (interrupted ? finish(HOLD_AFTER_INTERRUPT) : step(0)));
+    // a phrase ended: go on; another block or planet spoke instead: close; muted: show all and stay
+    const next = (how: SpeechEnd, i: number) =>
+      how === 'ended' ? step(i) : finish(how === 'replaced' ? HOLD_AFTER_INTERRUPT : STAY_OPEN);
+    const spoke = say(intro, (how) => next(how, 0));
     if (!spoke) finish(HOLD_WITHOUT_SOUND); // sound off: show everything for a while
   }
 

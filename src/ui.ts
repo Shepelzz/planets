@@ -9,6 +9,8 @@ interface Handlers {
   onTogglePlay: () => void;
   /** Open (or close, if open) the cut-away of the current body; onEnd when its story ends. Returns true if it opened. */
   onStructure: (onEnd: () => void) => boolean;
+  /** Another block on the card is about to talk. */
+  onTalk: () => void;
 }
 
 const EARTH = BODIES.find((b) => b.id === 'earth')!;
@@ -110,6 +112,7 @@ export function createUI(h: Handlers) {
   // ---- narration: tapping a block on the card reads it aloud ----
   let speakingEl: HTMLElement | null = null;
   function talk(el: HTMLElement, text: string) {
+    h.onTalk();
     speakingEl?.classList.remove('speaking');
     speakingEl = el;
     const spoke = say(text, () => {
@@ -135,7 +138,8 @@ export function createUI(h: Handlers) {
   }
   info.addEventListener('click', onTalkTap);
   info.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+    // Enter only: Space is the global pause key and must not press the focused block again
+    if (e.key === 'Enter') {
       e.preventDefault();
       onTalkTap(e);
     }

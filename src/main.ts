@@ -286,6 +286,7 @@ const ui = createUI({
     playing = !playing;
     ui.setPlaying(playing);
   },
+  onTalk: () => cutaway.fold(),
   onStructure: (onEnd) => {
     if (!focus) return false;
     if (cutaway.isOpen(focus)) {

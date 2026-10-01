@@ -12,7 +12,10 @@ let enabled = true;
 let voice: SpeechSynthesisVoice | null = null;
 // One element reused for every phrase: iOS unlocks playback per element on the first tap.
 let audio: HTMLAudioElement | null = null;
-let finishCurrent: ((interrupted: boolean) => void) | null = null;
+/** How a phrase ended: played to the end, replaced by another phrase, or cut off by muting. */
+export type SpeechEnd = 'ended' | 'replaced' | 'muted';
+
+let finishCurrent: ((how: SpeechEnd) => void) | null = null;
 
 function pickVoice() {
   if (!synth) return;
@@ -29,35 +32,34 @@ if (synth) {
 
 export const speechSupported = recorded.size > 0 || !!synth;
 
-/** Stop whatever is playing and report it as finished. */
-function stop() {
+/** Stop whatever is playing and report why. */
+function stop(how: SpeechEnd) {
   if (audio) audio.pause();
   synth?.cancel();
   const f = finishCurrent;
   finishCurrent = null;
-  f?.(true);
+  f?.(how);
 }
 
 export function setSpeechEnabled(on: boolean) {
   enabled = on;
-  if (!on) stop();
+  if (!on) stop('muted');
 }
 
 /**
  * Say a phrase, interrupting whatever is being said. Call from a tap/click handler (iOS needs a
- * user gesture). onDone runs when this phrase ends (interrupted = false) or is cut off by another
- * phrase or by muting (interrupted = true). Returns false when muted.
+ * user gesture). onDone tells how the phrase ended (see SpeechEnd). Returns false when muted.
  */
-export function say(text: string, onDone?: (interrupted: boolean) => void): boolean {
+export function say(text: string, onDone?: (how: SpeechEnd) => void): boolean {
   if (!enabled) return false;
-  stop();
+  stop('replaced');
 
   let done = false;
-  const finish = (interrupted = false) => {
+  const finish = (how: SpeechEnd = 'ended') => {
     if (done) return;
     done = true;
     if (finishCurrent === finish) finishCurrent = null;
-    onDone?.(interrupted);
+    onDone?.(how);
   };
   finishCurrent = finish;
 
@@ -87,7 +89,7 @@ export function say(text: string, onDone?: (interrupted: boolean) => void): bool
   return true;
 }
 
-function speakWithSynth(text: string, finish: (interrupted?: boolean) => void) {
+function speakWithSynth(text: string, finish: (how?: SpeechEnd) => void) {
   if (!synth) return finish();
   if (!voice) pickVoice();
   const u = new SpeechSynthesisUtterance(text);

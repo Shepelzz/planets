@@ -299,6 +299,7 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   outer.scale.setScalar(info.radius * 12);
   anchor.add(inner, outer);
   anchor.userData.halo = outer;
+  anchor.userData.glow = inner;
   scene.add(anchor);
 
   return { info, anchor, tilt, mesh, viewRadius: info.radius * 1.4, orbitAngle: 0, spinAngle: 0, materials: [mat], cut };
