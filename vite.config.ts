@@ -15,6 +15,25 @@ function siteUrl(): Plugin {
   };
 }
 
+function webManifest(ui: Record<string, string>) {
+  return JSON.stringify({
+    name: ui.title,
+    short_name: ui.title_short,
+    description: ui.description,
+    lang: 'uk',
+    start_url: '/solar-system',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#000000',
+    theme_color: '#000000',
+    icons: [
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  }, null, 2);
+}
+
 // texts.yaml is the single source of texts: `import x from '…/texts.yaml'` gives its data, and
 // {{ui.key}} in index.html is replaced with the matching ui text.
 function texts(): Plugin {
@@ -32,6 +51,16 @@ function texts(): Plugin {
         if (typeof ui[key] !== 'string') throw new Error(`texts.yaml: ui.${key} is missing (used in index.html)`);
         return escapeHtml(ui[key]);
       });
+    },
+    // the web app manifest (home-screen name and icons), from the same texts
+    configureServer(server) {
+      server.middlewares.use('/manifest.webmanifest', (_req, res) => {
+        res.setHeader('Content-Type', 'application/manifest+json');
+        res.end(webManifest(YAML.parse(readFileSync(file, 'utf8')).ui));
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'manifest.webmanifest', source: webManifest(YAML.parse(readFileSync(file, 'utf8')).ui) });
     },
     handleHotUpdate({ file: changed, server }) {
       // texts change → reload the page (index.html texts come from the same file)
@@ -120,6 +149,48 @@ function pages(): Plugin {
   };
 }
 
+// Offline: dist/sw.js, a service worker written at build time with the file lists it needs.
+//  · the app itself (JS, CSS, page, manifest, icons) is kept per release ("shell-<version>");
+//  · the start-up 2K maps are fetched once at install; voice, 4K maps and the ISS model are kept as
+//    they are used ("media"); all of these carry a fingerprint (?v=), so a cached copy is always right;
+//  · old releases and files that are no longer part of the app are dropped when a new one activates;
+//  · Safari asks for audio in byte ranges: answered from the cached file (206), or it won't play.
+function offline(): Plugin {
+  const root = new URL('./', import.meta.url).pathname;
+  const fp = (file: string) => createHash('sha1').update(readFileSync(file)).digest('hex').slice(0, 8);
+  return {
+    name: 'offline',
+    apply: 'build',
+    writeBundle(options) {
+      const out = options.dir ?? join(root, 'dist');
+      const pub = join(root, 'public');
+      const list = (dir: string) => (existsSync(join(pub, dir)) ? readdirSync(join(pub, dir)).filter((f) => !f.startsWith('.') && statSync(join(pub, dir, f)).isFile()) : []);
+      const versioned = (path: string) => `/${path}?v=${fp(join(pub, path))}`;
+      const lite = new Set(list('textures/lite'));
+      const startMaps = [
+        ...list('textures').filter((f) => !lite.has(f)).map((f) => versioned(`textures/${f}`)),
+        ...[...lite].map((f) => versioned(`textures/lite/${f}`)),
+      ];
+      const shell = [
+        '/index.html',
+        '/manifest.webmanifest',
+        ...readdirSync(join(out, 'assets')).map((f) => `/assets/${f}`),
+        ...list('icons').map((f) => `/icons/${f}`),
+      ];
+      const voice = Object.entries(JSON.parse(readFileSync(join(root, 'src', 'voice-manifest.json'), 'utf8')) as Record<string, string>)
+        .map(([k, v]) => `/voice/${k}.m4a?v=${v}`);
+      const keep = [...startMaps, ...list('textures').map((f) => versioned(`textures/${f}`)), ...list('models').map((f) => versioned(`models/${f}`)), ...voice];
+      const version = createHash('sha1').update(JSON.stringify([shell, shell.map((p) => (p.startsWith('/assets/') ? '' : existsSync(join(out, p)) ? fp(join(out, p)) : ''))])).digest('hex').slice(0, 10);
+      const sw = readFileSync(join(root, 'scripts', 'sw.template.js'), 'utf8')
+        .replace('__VERSION__', JSON.stringify(version))
+        .replace('__SHELL__', JSON.stringify(shell))
+        .replace('__START_MAPS__', JSON.stringify(startMaps))
+        .replace('__KEEP__', JSON.stringify([...new Set(keep)]));
+      writeFileSync(join(out, 'sw.js'), sw);
+    },
+  };
+}
+
 // Dev only: space.makeOgCards() posts each finished card here; saved as public/og/<id>.jpg.
 function ogCards(): Plugin {
   return {
@@ -136,9 +207,10 @@ function ogCards(): Plugin {
         const chunks: Buffer[] = [];
         req.on('data', (c: Buffer) => chunks.push(c));
         req.on('end', () => {
-          const dir = new URL('./public/og/', import.meta.url).pathname;
+          // 'icon' is the home-screen icon source (space.makeIcon()), the rest are link-preview cards
+          const dir = new URL(id === 'icon' ? './public/icons/' : './public/og/', import.meta.url).pathname;
           mkdirSync(dir, { recursive: true });
-          writeFileSync(join(dir, `${id}.jpg`), Buffer.concat(chunks));
+          writeFileSync(join(dir, id === 'icon' ? 'source.png' : `${id}.jpg`), Buffer.concat(chunks));
           res.end('ok');
         });
       });
@@ -149,7 +221,7 @@ function ogCards(): Plugin {
 export default defineConfig({
   // absolute paths: pages live at /earth, /solar-system… and must still find /assets, /voice, /textures
   base: '/',
-  plugins: [siteUrl(), texts(), assetVersions(), pages(), ogCards()],
+  plugins: [siteUrl(), texts(), assetVersions(), pages(), ogCards(), offline()],
   server: { port: 5210, strictPort: true, host: true },
   build: {
     // old iPads stay on iOS 12 (Safari 12): lower modern JS syntax and CSS for them

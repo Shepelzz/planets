@@ -20,6 +20,10 @@ services:
       - path: /voice/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
+      # the service worker must always be fresh, or a new release never reaches the browser
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
     # every address has its own page (own link preview), see pages() in vite.config.ts
     routes:
       - type: rewrite

@@ -516,7 +516,7 @@ configureLimits();
 }
 
 // debug handle
-(window as unknown as { space: unknown }).space = { scene, lowEnd, getPixelRatio: () => pixelRatio, renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d), ...(import.meta.env.DEV ? { makeOgCards } : {}) };
+(window as unknown as { space: unknown }).space = { scene, lowEnd, getPixelRatio: () => pixelRatio, renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d), ...(import.meta.env.DEV ? { makeOgCards, makeIcon } : {}) };
 
 // ---------- loop ----------
 let lastNow = performance.now();
@@ -544,21 +544,21 @@ let loaded = false;
 // Each body photographed by the real renderer at 1200×630, planet on the right, name on the left;
 // the dev server saves them as public/og/<id>.jpg for the pages' og:image (vite.config.ts).
 let ogShot: ((png: string) => void) | null = null;
-function takeOgShot() {
+let ogShotSize: [number, number, number, number] = [1200, 630, -0.2, 0.66];
+function takeOgShot(W = 1200, H = 630, shift = -0.2, fill = 0.66) {
   const b = focus!;
   const keep = { pos: camera.position.clone(), aspect: camera.aspect, near: camera.near };
-  const W = 1200, H = 630;
   renderer.setPixelRatio(1);
   renderer.setSize(W, H, false);
   camera.aspect = W / H;
   const dir = keep.pos.clone().sub(controls.target).normalize();
   // ringed planets: let the rings run wide, so the ball itself is big enough
   const r = b.info.rings ? b.viewRadius * 0.62 : b.viewRadius;
-  const dist = r / Math.sin(Math.atan(Math.tan((camera.fov * Math.PI) / 360) * 0.66));
+  const dist = r / Math.sin(Math.atan(Math.tan((camera.fov * Math.PI) / 360) * fill));
   camera.position.copy(controls.target).addScaledVector(dir, dist);
   camera.lookAt(controls.target);
   camera.near = Math.max(0.01, (dist - b.viewRadius) * 0.2);
-  camera.setViewOffset(W, H, -W * 0.2, 0, W, H); // the body sits right of centre, text goes left
+  camera.setViewOffset(W, H, W * shift, 0, W, H); // for cards the body sits right of centre, text goes left
   sky.group.position.copy(camera.position);
   // only the body and its own moons: no other planets or orbit lines behind the title
   const home = focus!.info.parent ?? focus!.info.id;
@@ -623,6 +623,20 @@ async function makeOgCards(ids?: BodyId[]) {
   flyTo(null, undefined, 'replace');
 }
 
+/** The home-screen icon: Saturn on black, square; the dev server saves it as public/icons/source.png. */
+async function makeIcon(id: BodyId = 'saturn') {
+  const b = byId.get(id)!;
+  flyTo(b, 0.01, 'none');
+  ui.hideInfo();
+  while (flight) await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => setTimeout(r, 1500));
+  ogShotSize = [1024, 1024, 0, 0.56];
+  const png = await new Promise<string>((r) => (ogShot = r));
+  ogShotSize = [1200, 630, -0.2, 0.66];
+  await fetch('/__og/icon', { method: 'POST', body: await (await fetch(png)).blob() });
+  flyTo(null, undefined, 'replace');
+}
+
 function frame(now: number) {
   const rawDt = Math.max(0, (now - lastNow) / 1000);
   lastNow = now;
@@ -648,7 +662,7 @@ function frame(now: number) {
   if (ogShot && focus && !flight) {
     const done = ogShot;
     ogShot = null;
-    done(takeOgShot());
+    done(takeOgShot(...ogShotSize));
   }
   renderer.render(scene, camera);
   if (!loaded && texturesReady) {
@@ -657,6 +671,10 @@ function frame(now: number) {
   }
   requestAnimationFrame(frame);
 }
+// offline: the built site keeps what it has loaded (dist/sw.js, see offline() in vite.config.ts)
+if (import.meta.env.PROD && 'serviceWorker' in navigator)
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+
 // compile every shader up front so the first flight doesn't stutter
 renderer.compile(scene, camera);
 requestAnimationFrame(frame);

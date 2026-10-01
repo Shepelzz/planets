@@ -66,6 +66,17 @@ npm run voice:all
 выполнить `space.makeOgCards()` (или `space.makeOgCards(['saturn'])`); вкладка должна быть видна.
 Обзор системы использует `public/og.jpg`.
 
+## На экран «Домой» и офлайн
+
+Иконка — Сатурн (`public/icons/`), манифест `manifest.webmanifest` собирается из `texts.yaml`
+(название и описание). Переснять иконку: `npm run dev`, в консоли `space.makeIcon()` (или
+`space.makeIcon('earth')`) → `public/icons/source.png`, из него нарезать 180/192/512 и maskable 512.
+
+Собранный сайт работает без интернета (`dist/sw.js`, `offline()` в `vite.config.ts`): приложение и
+стартовые карты сохраняются при первом визите, озвучка, 4K-карты и модель МКС — по мере
+использования. Старые версии файлов удаляются при обновлении. Проверить: `npm run build && npm run
+preview`, открыть, остановить сервер и перезагрузить страницу.
+
 ## Старые iPad (iOS 12)
 
 Сборка нацелена на Safari 12 (`build.target` в `vite.config.ts`), поэтому Three.js закреплён на
