@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Body } from './bodies';
 import { say, type SpeechEnd } from './speech';
-import { STRUCTURE } from './structure';
+import { STRUCTURE } from './content';
 
 // Textbook-style cut-away: a wedge facing the camera opens like a book, the two cut faces show the
 // layers as coloured rings, and each layer lights up while the voice tells about it.

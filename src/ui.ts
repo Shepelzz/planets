@@ -1,6 +1,5 @@
-import { BODIES, EARTH_DIAMETER, type BodyId, type BodyInfo } from './data';
-import { NARRATION } from './narration';
-import { STRUCTURE_LABEL } from './phrases';
+import { BODIES, INSIDE_STAT, NARRATION, UI, type BodyInfo } from './content';
+import { EARTH_DIAMETER, type BodyId } from './data';
 import { say, setSpeechEnabled, speechSupported } from './speech';
 
 interface Handlers {
@@ -57,10 +56,11 @@ function sizeCompare(info: BodyInfo): string {
   const earthR = Math.max((1 / big) * max, 1.5);
   const bodyR = Math.max((ratio / big) * max, 1.5);
   let caption: string;
-  if (info.id === 'earth') caption = 'Це і є Земля!';
-  else if (ratio >= 1.5) caption = `У ${fmt(ratio)} ${times(ratio)} більше за Землю`;
-  else if (ratio <= 0.67) caption = `У ${fmt(1 / ratio)} ${times(1 / ratio)} менше за Землю`;
-  else caption = 'Майже як Земля';
+  const fill = (t: string, x: number) => t.replace('{n}', fmt(x)).replace('{times}', times(x));
+  if (info.id === 'earth') caption = UI.compare_earth;
+  else if (ratio >= 1.5) caption = fill(UI.compare_bigger, ratio);
+  else if (ratio <= 0.67) caption = fill(UI.compare_smaller, 1 / ratio);
+  else caption = UI.compare_same;
   return `
     <div class="compare talk" role="button" tabindex="0" data-say="${esc(NARRATION[info.id].compare)}">
       ${SAY_MARK}
@@ -75,7 +75,7 @@ function sizeCompare(info: BodyInfo): string {
           <span>${EARTH.name}</span>
         </div>`}
       </div>
-      <div class="compare-caption">${caption} (завширшки)</div>
+      <div class="compare-caption">${caption} ${UI.compare_width}</div>
     </div>`;
 }
 
@@ -138,7 +138,7 @@ export function createUI(h: Handlers) {
     moonsRow.classList.toggle('show', show);
     document.body.classList.toggle('has-moons', show);
     if (!show || !parent) return;
-    moonsRow.setAttribute('aria-label', `Супутники ${parent.nameGenitive ?? parent.name}`);
+    moonsRow.setAttribute('aria-label', UI.moons_of.replace('{name}', parent.nameGenitive ?? parent.name));
     moonsRow.innerHTML = moons
         .map(
           (m) =>
@@ -211,7 +211,7 @@ export function createUI(h: Handlers) {
     const b = current;
     info.hidden = !infoWanted;
     info.innerHTML = `
-      <button class="close" aria-label="Сховати">${ICONS.close}</button>
+      <button class="close" aria-label="${UI.close}">${ICONS.close}</button>
       <div class="info-head">
         <span class="info-ball${iconClass(b)}" style="background:${iconBg(b)}"></span>
         <div>
@@ -221,24 +221,24 @@ export function createUI(h: Handlers) {
       </div>
       <div class="info-body">
         <dl class="stats">
-          ${b.stats.map(([k, v]) => {
-            const value = esc(v).replace(/\n/g, '<br>');
-            return k === STRUCTURE_LABEL
-              ? `<div class="talk structure" role="button" tabindex="0" data-structure="1">${CUT_MARK}<dt>${k}</dt><dd>${value}</dd><p class="cut-hint">натисни — і зазирни всередину</p></div>`
-              : `<div class="talk" role="button" tabindex="0" data-say="${esc(NARRATION[b.id].stats[k] ?? `${k}: ${v}`)}">${SAY_MARK}<dt>${k}</dt><dd>${value}</dd>${k === 'Супутники' ? statMoons(b) : ''}</div>`;
+          ${b.stats.map((st) => {
+            const value = esc(st.value).replace(/\n/g, '<br>');
+            return st.id === INSIDE_STAT
+              ? `<div class="talk structure" role="button" tabindex="0" data-structure="1">${CUT_MARK}<dt>${st.label}</dt><dd>${value}</dd><p class="cut-hint">${UI.cut_hint}</p></div>`
+              : `<div class="talk" role="button" tabindex="0" data-say="${esc(NARRATION[b.id].stats[st.id])}">${SAY_MARK}<dt>${st.label}</dt><dd>${value}</dd>${st.id === 'moons' ? statMoons(b) : ''}</div>`;
           }).join('')}
         </dl>
         ${sizeCompare(b)}
         <section class="fact">
-          <h2>А ти знаєш?</h2>
+          <h2>${UI.did_you_know}</h2>
           <p class="fact-text talk" role="button" tabindex="0">${b.facts[factIndex % b.facts.length]}</p>
           <div class="fact-foot">
             <span class="dots">${b.facts.map((_, i) => `<i class="${i === factIndex % b.facts.length ? 'on' : ''}"></i>`).join('')}</span>
-            <button class="next-fact">Ще факт</button>
+            <button class="next-fact">${UI.more_fact}</button>
           </div>
         </section>
       </div>
-      <p class="credit">Мапи планет: <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> (CC BY 4.0) за даними NASA; Плутон і Харон — NASA / New Horizons</p>`;
+      <p class="credit">${esc(UI.credit)}</p>`;
     info.querySelector('.close')!.addEventListener('click', () => {
       infoWanted = false;
       renderInfo();
@@ -266,7 +266,8 @@ export function createUI(h: Handlers) {
     document.body.classList.toggle('no-labels', !labelsOn);
     btnLabels.classList.toggle('active', labelsOn);
     btnLabels.setAttribute('aria-pressed', String(labelsOn));
-    btnLabels.title = labelsOn ? 'Сховати підписи планет (L)' : 'Показати підписи планет (L)';
+    btnLabels.title = labelsOn ? UI.labels_hide : UI.labels_show;
+    btnLabels.setAttribute('aria-label', btnLabels.title);
   }
   function toggleLabels() {
     labelsOn = !labelsOn;
@@ -285,7 +286,8 @@ export function createUI(h: Handlers) {
     btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
     btnSound.classList.toggle('active', soundOn);
     btnSound.setAttribute('aria-pressed', String(soundOn));
-    btnSound.title = soundOn ? 'Не називати планети вголос (S)' : 'Називати планети вголос (S)';
+    btnSound.title = soundOn ? UI.sound_off : UI.sound_on;
+    btnSound.setAttribute('aria-label', btnSound.title);
   }
   function toggleSound() {
     soundOn = !soundOn;
@@ -319,7 +321,8 @@ export function createUI(h: Handlers) {
     btnSound.innerHTML = soundOn ? ICONS.soundOn : ICONS.soundOff;
     btnSound.classList.toggle('active', soundOn);
     btnSound.setAttribute('aria-pressed', String(soundOn));
-    btnSound.title = soundOn ? 'Не називати планети вголос (S)' : 'Називати планети вголос (S)';
+    btnSound.title = soundOn ? UI.sound_off : UI.sound_on;
+    btnSound.setAttribute('aria-label', btnSound.title);
   }
   function toggleSound() {
     soundOn = !soundOn;
@@ -363,8 +366,8 @@ export function createUI(h: Handlers) {
     },
     setPlaying(p: boolean) {
       btnMotion.innerHTML = p ? ICONS.pause : ICONS.play;
-      btnMotion.setAttribute('aria-label', p ? 'Пауза' : 'Продовжити');
-      btnMotion.title = p ? 'Зупинити рух (пробіл)' : 'Запустити рух (пробіл)';
+      btnMotion.title = p ? UI.pause : UI.play;
+      btnMotion.setAttribute('aria-label', btnMotion.title);
     },
     toggleInfo() {
       if (!current) return;

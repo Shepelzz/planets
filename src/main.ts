@@ -9,7 +9,7 @@ import { createUI } from './ui';
 import { Cutaway } from './cutaway';
 import { loadingManager, useLiteTextures } from './textures';
 import { renderThumbnails } from './thumbnails';
-import { NARRATION } from './narration';
+import { NARRATION, UI } from './content';
 import { say } from './speech';
 import './style.css';
 
@@ -40,7 +40,7 @@ const loaderEl = document.getElementById('loader')!;
 const loaderText = loaderEl.querySelector('.loader-text')!;
 let texturesReady = false;
 loadingManager.onProgress = (_url, done, total) => {
-  loaderText.textContent = `Летимо в космос… ${Math.round((done / total) * 100)}%`;
+  loaderText.textContent = `${UI.loading} ${Math.round((done / total) * 100)}%`;
 };
 loadingManager.onLoad = () => {
   texturesReady = true;

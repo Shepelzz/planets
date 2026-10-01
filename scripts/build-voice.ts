@@ -1,7 +1,7 @@
 // Pre-records every phrase the app speaks with the macOS Ukrainian voice (Lesya), so devices without
 // that voice (old iPads on iOS 12 fall back to a Russian one) sound the same as modern ones.
 //
-//   npm run voice        (macOS only; re-run after changing texts in src/data.ts or src/narration.ts)
+//   npm run voice        (macOS only; re-run after changing texts.yaml)
 //
 // Files are keyed by text only: after changing VOICE_PITCH, delete public/voice/ to re-record all.
 // Output: public/voice/<key>.m4a (AAC, plays in Safari 12) and src/voice-manifest.json (list of keys).
@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spokenPhrases } from '../src/phrases.ts';
+import * as content from './content.ts';
 import { VOICE_PITCH, voiceKey } from '../src/voiceKey.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,7 +20,7 @@ const tmp = join(root, 'node_modules', '.cache', 'voice');
 mkdirSync(outDir, { recursive: true });
 mkdirSync(tmp, { recursive: true });
 
-const phrases = new Set(spokenPhrases().map((p) => p.text));
+const phrases = new Set(spokenPhrases(content).map((p) => p.text));
 
 const keys: string[] = [];
 let made = 0;

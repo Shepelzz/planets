@@ -6,53 +6,53 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Планети" />
+    <meta name="apple-mobile-web-app-title" content="{{ui.title_short}}" />
     <meta name="theme-color" content="#000000" />
-    <title>Подорож до планет</title>
-    <meta name="description" content="3D-мандрівка Сонячною системою для дітей: справжні планети, Сонце й Місяць, цікаві факти й озвучка українською. Працює на iPad і комп’ютері." />
+    <title>{{ui.title}}</title>
+    <meta name="description" content="{{ui.description}}" />
 
     <!-- link preview card (Open Graph / X); __SITE_URL__ is filled in at build time, see vite.config.ts -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Подорож до планет" />
+    <meta property="og:site_name" content="{{ui.title}}" />
     <meta property="og:locale" content="uk_UA" />
-    <meta property="og:title" content="Подорож до планет" />
-    <meta property="og:description" content="3D-мандрівка Сонячною системою для дітей: справжні планети, цікаві факти й озвучка українською." />
+    <meta property="og:title" content="{{ui.title}}" />
+    <meta property="og:description" content="{{ui.share_description}}" />
     <meta property="og:url" content="__SITE_URL__/" />
     <meta property="og:image" content="__SITE_URL__/og.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Сонце й вісім планет Сонячної системи в ряд і напис «Подорож до планет»" />
+    <meta property="og:image:alt" content="{{ui.share_image_alt}}" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Подорож до планет" />
-    <meta name="twitter:description" content="3D-мандрівка Сонячною системою для дітей: справжні планети, цікаві факти й озвучка українською." />
+    <meta name="twitter:title" content="{{ui.title}}" />
+    <meta name="twitter:description" content="{{ui.share_description}}" />
     <meta name="twitter:image" content="__SITE_URL__/og.jpg" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='16' fill='%23e3c48a'/%3E%3Cellipse cx='32' cy='32' rx='29' ry='8' fill='none' stroke='%23c9a86a' stroke-width='3' transform='rotate(-20 32 32)'/%3E%3C/svg%3E" />
   </head>
   <body>
     <canvas id="scene" touch-action="none"></canvas>
-    <div id="loader"><span class="loader-ball"></span><span class="loader-text">Летимо в космос…</span></div>
+    <div id="loader"><span class="loader-ball"></span><span class="loader-text">{{ui.loading}}</span></div>
 
     <div id="labels"></div>
 
     <header id="topbar">
       <div class="brand">
         <span class="brand-dot"></span>
-        <span class="brand-text">Подорож до планет</span>
+        <span class="brand-text">{{ui.title}}</span>
       </div>
       <div class="actions">
-        <button class="icon-btn" id="btn-motion" aria-label="Пауза" title="Зупинити рух (пробіл)"></button>
-        <button class="icon-btn" id="btn-overview" aria-label="Уся Сонячна система" title="Уся Сонячна система (Esc)"></button>
-        <button class="icon-btn" id="btn-sound" aria-label="Звук" title="Називати планети вголос (S)"></button>
-        <button class="icon-btn" id="btn-labels" aria-label="Підписи планет" title="Підписи планет (L)"></button>
+        <button class="icon-btn" id="btn-motion" aria-label="{{ui.pause}}" title="{{ui.pause}}"></button>
+        <button class="icon-btn" id="btn-overview" aria-label="{{ui.overview}}" title="{{ui.overview}}"></button>
+        <button class="icon-btn" id="btn-sound" aria-label="{{ui.sound_off}}" title="{{ui.sound_off}}"></button>
+        <button class="icon-btn" id="btn-labels" aria-label="{{ui.labels_hide}}" title="{{ui.labels_hide}}"></button>
       </div>
     </header>
 
     <aside id="info" hidden></aside>
 
-    <div id="hint">Натисни на планету, щоб полетіти до неї</div>
+    <div id="hint">{{ui.hint}}</div>
 
-    <nav id="dock" aria-label="Планети"></nav>
+    <nav id="dock" aria-label="{{ui.title_short}}"></nav>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

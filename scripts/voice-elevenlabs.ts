@@ -22,8 +22,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NARRATION } from '../src/narration.ts';
 import { spokenPhrases } from '../src/phrases.ts';
+import * as content from './content.ts';
+const { NARRATION } = content;
 import { voiceKey } from '../src/voiceKey.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,7 +69,7 @@ const config = JSON.parse(readFileSync(join(root, 'scripts', 'elevenlabs-config.
 const model = process.env.ELEVENLABS_MODEL || config.model;
 const args = process.argv.slice(2);
 
-const phrasesByPriority = spokenPhrases;
+const phrasesByPriority = () => spokenPhrases(content);
 
 class QuotaError extends Error {}
 

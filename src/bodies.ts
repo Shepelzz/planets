@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BODIES, type BodyInfo } from './data';
+import { BODIES, type BodyInfo } from './content';
 import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
 import { loadTexture, SRGB_GLSL } from './textures';

@@ -1,132 +1,78 @@
-import type { BodyId } from './data';
+import type { BodyId } from './data.ts';
 
-// What's inside each body, for the cut-away view. Layers go from the surface inwards (the order they
-// are told in); `to` is the layer's outer edge as a fraction of the radius. Proportions follow real
-// models, except that thin crusts are drawn thicker so a child can see them. Texts are for a
-// five-year-old, gender-neutral, and avoid «Землі» (the built-in voice stresses it wrongly).
+// Layers inside each body for the cut-away view, surface first: the outer edge of each layer as a
+// fraction of the radius and its colour. Proportions follow real models, except that thin crusts are
+// drawn thicker so a child can see them. Names and narration for each layer id are in texts.yaml.
 
-export interface Layer {
-  name: string;
+export interface LayerPhysics {
+  /** matches bodies.<id>.inside.layers.<id> in texts.yaml */
+  id: string;
   /** outer edge, fraction of the radius */
   to: number;
   color: string;
-  text: string;
 }
 
-export interface Structure {
-  /** said first, while the planet opens */
-  intro: string;
-  /** surface first */
-  layers: Layer[];
-}
-
-const CRUST = '#9a6a3c';
-const MANTLE = '#d9622b';
-const OUTER_CORE = '#f2a33a';
-const INNER_CORE = '#fff0a6';
-const IRON_CORE = '#f0c060';
-const CLOUDS = '#e2c49a';
-const LIQUID_H = '#8db4dc';
-const METALLIC_H = '#5a78b8';
-const ROCK_CORE = '#b9784c';
-
-export const STRUCTURE: Record<BodyId, Structure> = {
-  sun: {
-    intro: 'Сонце не тверде — воно складається з газів, водню й гелію. Зазирнімо всередину!',
-    layers: [
-      { name: 'Кипляча зона', to: 1, color: '#ff8a2a', text: 'Зверху гарячий газ кипить: піднімається й опускається, як суп у каструлі.' },
-      { name: 'Зона випромінювання', to: 0.7, color: '#ffc04a', text: 'Глибше світло пробирається назовні дуже-дуже довго — сотні тисяч років!' },
-      { name: 'Ядро', to: 0.25, color: '#fff6c8', text: 'А в центрі — ядро. Це найгарячіше місце: тут народжуються сонячне світло й тепло!' },
-    ],
-  },
-  mercury: {
-    intro: 'Зазирнімо всередину Меркурія!',
-    layers: [
-      { name: 'Кора', to: 1, color: CRUST, text: 'Зверху — тонка кам’яна кора, вся в кратерах.' },
-      { name: 'Мантія', to: 0.95, color: MANTLE, text: 'Під нею — кам’яна мантія. Вона зовсім тоненька.' },
-      { name: 'Залізне ядро', to: 0.83, color: IRON_CORE, text: 'А майже весь Меркурій усередині — це величезне залізне ядро! Воно займає більшу частину планети.' },
-    ],
-  },
-  venus: {
-    intro: 'Зазирнімо всередину Венери!',
-    layers: [
-      { name: 'Кора', to: 1, color: CRUST, text: 'Зверху — кам’яна кора з вулканами й широкими рівнинами.' },
-      { name: 'Мантія', to: 0.95, color: MANTLE, text: 'Під нею — гаряча кам’яна мантія.' },
-      { name: 'Залізне ядро', to: 0.5, color: IRON_CORE, text: 'А в центрі — залізне ядро. Усередині Венера дуже схожа на нашу планету!' },
-    ],
-  },
-  earth: {
-    intro: 'Давай розріжемо нашу планету й зазирнемо всередину! Вона складається з шарів, як цибулинка.',
-    layers: [
-      { name: 'Кора', to: 1, color: CRUST, text: 'Зверху — кора. Це тверда кам’яна шкаринка, на якій ростуть ліси, стоять міста й плещуться океани. Вона тоненька, як шкірка на яблуці!' },
-      { name: 'Мантія', to: 0.95, color: MANTLE, text: 'Під корою — мантія. Це дуже гаряче каміння, яке повільно-повільно тече, як густа-прегуста карамель.' },
-      { name: 'Зовнішнє ядро', to: 0.55, color: OUTER_CORE, text: 'Далі — зовнішнє ядро з рідкого розпеченого заліза. Воно рухається і робить нашу планету великим магнітом — тому й працює компас!' },
-      { name: 'Внутрішнє ядро', to: 0.19, color: INNER_CORE, text: 'А в самому центрі — внутрішнє ядро: тверда залізна куля, майже така гаряча, як поверхня Сонця!' },
-    ],
-  },
-  moon: {
-    intro: 'Зазирнімо всередину Місяця!',
-    layers: [
-      { name: 'Кора', to: 1, color: '#a8a39a', text: 'Зверху — кам’яна кора, вкрита пилом і кратерами.' },
-      { name: 'Мантія', to: 0.94, color: '#c0703c', text: 'Під нею — товста кам’яна мантія. Вона давно охолола, тому на Місяці більше немає вулканів.' },
-      { name: 'Ядро', to: 0.2, color: IRON_CORE, text: 'А в центрі — маленьке залізне ядро.' },
-    ],
-  },
-  mars: {
-    intro: 'Зазирнімо всередину Марса!',
-    layers: [
-      { name: 'Кора', to: 1, color: '#b0532c', text: 'Зверху — кора з червоного, іржавого каміння.' },
-      { name: 'Мантія', to: 0.94, color: MANTLE, text: 'Під нею — кам’яна мантія. Колись вона була дуже гарячою, і на Марсі вивергалися величезні вулкани.' },
-      { name: 'Ядро', to: 0.53, color: IRON_CORE, text: 'А в центрі — ядро із заліза й сірки.' },
-    ],
-  },
-  jupiter: {
-    intro: 'У Юпітера немає твердої поверхні. Зазирнімо всередину велетня!',
-    layers: [
-      { name: 'Хмари', to: 1, color: CLOUDS, text: 'Зверху — хмари й вітри. Це ті смужки, які видно в телескоп.' },
-      { name: 'Рідкий водень', to: 0.96, color: LIQUID_H, text: 'Глибше газ стискається так сильно, що стає рідким. Це величезний океан рідкого водню!' },
-      { name: 'Металевий водень', to: 0.78, color: METALLIC_H, text: 'Ще глибше водень стиснутий так сильно, що стає схожим на рідкий метал.' },
-      { name: 'Ядро', to: 0.2, color: ROCK_CORE, text: 'А в самій середині, мабуть, є ядро з каміння й льоду. Учені досі його вивчають!' },
-    ],
-  },
-  saturn: {
-    intro: 'Зазирнімо всередину Сатурна!',
-    layers: [
-      { name: 'Хмари', to: 1, color: '#ead6a8', text: 'Зверху — хмари з жовтуватими смугами.' },
-      { name: 'Рідкий водень', to: 0.96, color: LIQUID_H, text: 'Під хмарами — океан рідкого водню.' },
-      { name: 'Металевий водень', to: 0.5, color: METALLIC_H, text: 'Глибше водень стиснутий так сильно, що стає схожим на рідкий метал.' },
-      { name: 'Ядро', to: 0.22, color: ROCK_CORE, text: 'А в центрі — ядро з каміння й льоду.' },
-    ],
-  },
-  uranus: {
-    intro: 'Зазирнімо всередину Урана!',
-    layers: [
-      { name: 'Атмосфера', to: 1, color: '#a8e0ea', text: 'Зверху — холодна атмосфера з водню, гелію й метану. Саме метан робить Уран блакитним.' },
-      { name: 'Мантія з «льодів»', to: 0.75, color: '#4b9cc4', text: 'Під нею — густа гаряча суміш води, аміаку й метану. Учені називають її льодами, хоча вона зовсім не схожа на лід у морозилці!' },
-      { name: 'Ядро', to: 0.2, color: ROCK_CORE, text: 'А в центрі — невелике кам’яне ядро.' },
-    ],
-  },
-  neptune: {
-    intro: 'Зазирнімо всередину Нептуна!',
-    layers: [
-      { name: 'Атмосфера', to: 1, color: '#6f9be8', text: 'Зверху — синя атмосфера з водню, гелію й метану, де дмуть найсильніші вітри.' },
-      { name: 'Мантія з «льодів»', to: 0.8, color: '#3c68b0', text: 'Під нею — густа гаряча суміш води, аміаку й метану. Можливо, там навіть падає дощ із діамантів!' },
-      { name: 'Ядро', to: 0.25, color: ROCK_CORE, text: 'А в центрі — кам’яне ядро, завбільшки приблизно як наша планета.' },
-    ],
-  },
-  pluto: {
-    intro: 'Зазирнімо всередину Плутона!',
-    layers: [
-      { name: 'Крижана кора', to: 1, color: '#e6ddd2', text: 'Зверху — товста крижана кора. Лід там такий холодний, що твердий, як камінь!' },
-      { name: 'Підземний океан', to: 0.86, color: '#4f8fd0', text: 'Під льодом, можливо, ховається океан з води. Учені ще з’ясовують, чи він справді там є!' },
-      { name: 'Кам’яне ядро', to: 0.72, color: ROCK_CORE, text: 'А в центрі — велике кам’яне ядро.' },
-    ],
-  },
-  charon: {
-    intro: 'Зазирнімо всередину Харона!',
-    layers: [
-      { name: 'Крижана кора', to: 1, color: '#d6dbe0', text: 'Зверху — товста кора з водяного льоду.' },
-      { name: 'Кам’яне ядро', to: 0.7, color: ROCK_CORE, text: 'А всередині — кам’яне ядро.' },
-    ],
-  },
+export const LAYERS: Record<BodyId, LayerPhysics[]> = {
+  sun: [
+    { id: 'convection', to: 1, color: '#ff8a2a' },
+    { id: 'radiation', to: 0.7, color: '#ffc04a' },
+    { id: 'core', to: 0.25, color: '#fff6c8' },
+  ],
+  mercury: [
+    { id: 'crust', to: 1, color: '#9a6a3c' },
+    { id: 'mantle', to: 0.95, color: '#d9622b' },
+    { id: 'core', to: 0.83, color: '#f0c060' },
+  ],
+  venus: [
+    { id: 'crust', to: 1, color: '#9a6a3c' },
+    { id: 'mantle', to: 0.95, color: '#d9622b' },
+    { id: 'core', to: 0.5, color: '#f0c060' },
+  ],
+  earth: [
+    { id: 'crust', to: 1, color: '#9a6a3c' },
+    { id: 'mantle', to: 0.95, color: '#d9622b' },
+    { id: 'outer_core', to: 0.55, color: '#f2a33a' },
+    { id: 'inner_core', to: 0.19, color: '#fff0a6' },
+  ],
+  moon: [
+    { id: 'crust', to: 1, color: '#a8a39a' },
+    { id: 'mantle', to: 0.94, color: '#c0703c' },
+    { id: 'core', to: 0.2, color: '#f0c060' },
+  ],
+  mars: [
+    { id: 'crust', to: 1, color: '#b0532c' },
+    { id: 'mantle', to: 0.94, color: '#d9622b' },
+    { id: 'core', to: 0.53, color: '#f0c060' },
+  ],
+  jupiter: [
+    { id: 'clouds', to: 1, color: '#e2c49a' },
+    { id: 'liquid_hydrogen', to: 0.96, color: '#8db4dc' },
+    { id: 'metallic_hydrogen', to: 0.78, color: '#5a78b8' },
+    { id: 'core', to: 0.2, color: '#b9784c' },
+  ],
+  saturn: [
+    { id: 'clouds', to: 1, color: '#ead6a8' },
+    { id: 'liquid_hydrogen', to: 0.96, color: '#8db4dc' },
+    { id: 'metallic_hydrogen', to: 0.5, color: '#5a78b8' },
+    { id: 'core', to: 0.22, color: '#b9784c' },
+  ],
+  uranus: [
+    { id: 'atmosphere', to: 1, color: '#a8e0ea' },
+    { id: 'mantle', to: 0.75, color: '#4b9cc4' },
+    { id: 'core', to: 0.2, color: '#b9784c' },
+  ],
+  neptune: [
+    { id: 'atmosphere', to: 1, color: '#6f9be8' },
+    { id: 'mantle', to: 0.8, color: '#3c68b0' },
+    { id: 'core', to: 0.25, color: '#b9784c' },
+  ],
+  pluto: [
+    { id: 'crust', to: 1, color: '#e6ddd2' },
+    { id: 'ocean', to: 0.86, color: '#4f8fd0' },
+    { id: 'core', to: 0.72, color: '#b9784c' },
+  ],
+  charon: [
+    { id: 'crust', to: 1, color: '#d6dbe0' },
+    { id: 'core', to: 0.7, color: '#b9784c' },
+  ],
 };
