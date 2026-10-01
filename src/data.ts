@@ -13,6 +13,10 @@ export interface Atmosphere {
 export interface BodyInfo {
   id: BodyId;
   name: string;
+  /** "of <name>", for labels like «Супутники Землі» */
+  nameGenitive?: string;
+  /** dwarf planet: shown in its own group in the dock */
+  dwarf?: boolean;
   kind: string;
   /** CSS gradient for the dock icon */
   icon: string;
@@ -75,6 +79,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'mercury',
     name: 'Меркурій',
+    nameGenitive: 'Меркурія',
     kind: 'Найменша й найближча до Сонця',
     icon: 'radial-gradient(circle at 35% 35%, #cfc8c0 0%, #8f8780 55%, #4a4541 100%)',
     diameterKm: 4879,
@@ -103,6 +108,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'venus',
     name: 'Венера',
+    nameGenitive: 'Венери',
     kind: 'Найгарячіша планета',
     icon: 'radial-gradient(circle at 35% 35%, #fff3d2 0%, #e6c98e 50%, #a47f45 100%)',
     diameterKm: 12104,
@@ -132,6 +138,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'earth',
     name: 'Земля',
+    nameGenitive: 'Землі',
     kind: 'Наш дім',
     icon: 'radial-gradient(circle at 35% 35%, #bfe3ff 0%, #3b86d6 40%, #2d6b3a 70%, #0d2a4a 100%)',
     diameterKm: 12742,
@@ -193,6 +200,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'mars',
     name: 'Марс',
+    nameGenitive: 'Марса',
     kind: 'Червона планета',
     icon: 'radial-gradient(circle at 35% 35%, #ffc49a 0%, #d0643a 50%, #6e2a16 100%)',
     diameterKm: 6779,
@@ -223,6 +231,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'jupiter',
     name: 'Юпітер',
+    nameGenitive: 'Юпітера',
     kind: 'Найбільша планета',
     icon: 'repeating-linear-gradient(180deg, #e9dcc3 0 12%, #b98a61 12% 20%, #efe4cf 20% 32%, #a5714c 32% 40%), #d9c2a0',
     diameterKm: 139820,
@@ -253,6 +262,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'saturn',
     name: 'Сатурн',
+    nameGenitive: 'Сатурна',
     kind: 'Планета з кільцями',
     icon: 'radial-gradient(circle at 35% 35%, #fbefcf 0%, #dcc08a 55%, #8e7447 100%)',
     diameterKm: 116460,
@@ -284,6 +294,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'uranus',
     name: 'Уран',
+    nameGenitive: 'Урана',
     kind: 'Планета, що лежить на боці',
     icon: 'radial-gradient(circle at 35% 35%, #e6fbff 0%, #9fdde6 50%, #4d8f9c 100%)',
     diameterKm: 50724,
@@ -314,6 +325,7 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'neptune',
     name: 'Нептун',
+    nameGenitive: 'Нептуна',
     kind: 'Найдальша планета',
     icon: 'radial-gradient(circle at 35% 35%, #bcd3ff 0%, #3f6fe0 50%, #16307a 100%)',
     diameterKm: 49244,
@@ -343,6 +355,8 @@ export const BODIES: BodyInfo[] = [
   {
     id: 'pluto',
     name: 'Плутон',
+    nameGenitive: 'Плутона',
+    dwarf: true,
     kind: 'Карликова планета',
     icon: 'radial-gradient(circle at 35% 35%, #f6e7d6 0%, #c9a588 50%, #6b4a3a 100%)',
     diameterKm: 2377,

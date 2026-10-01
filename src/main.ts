@@ -112,6 +112,8 @@ function freeArea() {
   let top = 70, bottom = h, right = w;
   const dock = document.getElementById('dock')!.getBoundingClientRect();
   bottom = Math.min(bottom, dock.top - 8);
+  const moons = document.getElementById('moons');
+  if (moons && moons.classList.contains('show')) bottom = Math.min(bottom, moons.getBoundingClientRect().top - 8);
   const info = document.getElementById('info')!;
   if (!info.hidden) {
     const rc = info.getBoundingClientRect();

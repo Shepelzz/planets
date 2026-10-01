@@ -6,6 +6,7 @@
   --muted: rgba(223, 230, 245, 0.66);
   --accent: #ffd27a;
   --dock-h: 96px;
+  --moons-h: 0px; /* height taken by the moons row when it is shown */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
@@ -217,7 +218,7 @@ body.no-labels #labels { display: none; }
 #hint {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--dock-h) + 30px + var(--safe-b));
+  bottom: calc(var(--dock-h) + var(--moons-h) + 30px + var(--safe-b));
   transform: translateX(-50%);
   padding: 12px 20px;
   border-radius: 999px;
@@ -243,7 +244,7 @@ body.no-labels #labels { display: none; }
   z-index: 6;
   top: calc(84px + var(--safe-t));
   right: calc(16px + var(--safe-r));
-  bottom: calc(var(--dock-h) + 28px + var(--safe-b));
+  bottom: calc(var(--dock-h) + var(--moons-h) + 28px + var(--safe-b));
   width: 360px;
   max-height: 720px;
   overflow-y: auto;
@@ -399,7 +400,7 @@ h1.talk.speaking, .fact-text.talk.speaking { box-shadow: none; color: var(--acce
     width: auto;
     max-width: 760px;
     margin: 0 auto;
-    bottom: calc(var(--dock-h) + 22px + var(--safe-b));
+    bottom: calc(var(--dock-h) + var(--moons-h) + 22px + var(--safe-b));
     max-height: 44vh;
     animation-name: sheet-in;
   }
@@ -477,3 +478,65 @@ body.low-end * {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+/* ---------- dock groups, moon counters and the moons row ---------- */
+.dock-sep { flex: 0 0 1px; width: 1px; align-self: stretch; margin: 12px 6px; background: var(--line); }
+.chip-badge {
+  position: absolute;
+  top: -5px;
+  right: -9px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: rgba(14, 18, 32, 0.92);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.chip.selected .chip-badge { color: var(--accent); border-color: rgba(255, 210, 122, 0.5); }
+
+body.has-moons { --moons-h: 58px; }
+#moons {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--dock-h) + 22px + var(--safe-b));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  padding: 6px 8px 6px 14px;
+  border-radius: 18px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 12px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+#moons.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.moons-label { flex: 0 0 auto; margin-right: 8px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.moon-chip, .stat-moon {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-align: left;
+}
+.moon-chip { margin-left: 6px; padding: 3px 12px 3px 3px; line-height: 0; }
+.moon-chip:active, .stat-moon:active { transform: scale(0.95); }
+.moon-chip.selected { background: rgba(255, 210, 122, 0.2); border-color: rgba(255, 210, 122, 0.5); }
+.moon-ball { display: inline-block; vertical-align: middle; width: 28px; height: 28px; border-radius: 50%; box-shadow: inset -5px -4px 8px rgba(0, 0, 0, 0.5); }
+.moon-ball.textured { box-shadow: none; }
+.moon-name { display: inline-block; vertical-align: middle; margin-left: 8px; font-size: 14px; font-weight: 600; line-height: 28px; }
+.moon-chip.selected .moon-name { color: var(--accent); }
+.stat-moons { margin-top: 6px; }
+.stat-moon { display: inline-block; margin: 4px 6px 0 0; padding: 2px 10px 2px 2px; font-size: 13px; font-weight: 600; line-height: 22px; }
+.stat-moon .moon-ball { width: 22px; height: 22px; margin-right: 6px; }

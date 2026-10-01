@@ -39,6 +39,17 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').repl
 const CUT_MARK = '<svg class="say-mark cut-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z" fill="currentColor"/><path d="M14 2.2A9 9 0 0 1 21.8 10H14z" fill="currentColor" opacity=".45"/></svg>';
 const SAY_MARK = '<svg class="say-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
+const moonsOf = (id: BodyId) => BODIES.filter((b) => b.parent === id);
+
+/** Buttons for the moons we can fly to, inside the card's «Супутники» block. */
+function statMoons(b: BodyInfo): string {
+  const moons = moonsOf(b.id);
+  if (!moons.length) return '';
+  return `<div class="stat-moons">${moons
+    .map((m) => `<button class="stat-moon" data-moon="${m.id}"><span class="moon-ball${iconClass(m)}" style="background:${iconBg(m)}"></span>${m.name}</button>`)
+    .join('')}</div>`;
+}
+
 function sizeCompare(info: BodyInfo): string {
   const ratio = info.diameterKm / EARTH_DIAMETER;
   const max = 64;
@@ -92,16 +103,55 @@ export function createUI(h: Handlers) {
   btnOverview.innerHTML = ICONS.system;
   btnLabels.innerHTML = ICONS.labels;
 
+  // The dock holds only the Sun, the planets and the dwarf planet (in groups with dividers); moons
+  // live in a row that appears above it for the chosen planet, so the dock never grows with them.
   const chips = new Map<BodyId, HTMLButtonElement>();
-  for (const b of BODIES) {
+  let prevGroup = '';
+  for (const b of BODIES.filter((x) => !x.parent)) {
+    const group = b.id === 'sun' ? 'star' : b.dwarf ? 'dwarf' : 'planet';
+    if (prevGroup && group !== prevGroup) {
+      const sep = document.createElement('span');
+      sep.className = 'dock-sep';
+      dock.appendChild(sep);
+    }
+    prevGroup = group;
     const chip = document.createElement('button');
     chip.className = 'chip' + (b.rings ? ' ringed' : '') + (b.id === 'sun' ? ' star' : '');
-    chip.innerHTML = `<span class="chip-ball"></span><span class="chip-name">${b.name}</span>`;
+    const moonCount = moonsOf(b.id).length;
+    const badge = moonCount ? `<span class="chip-badge" aria-label="супутників: ${moonCount}">${moonCount}</span>` : '';
+    chip.innerHTML = `<span class="chip-ball">${badge}</span><span class="chip-name">${b.name}</span>`;
     chip.addEventListener('click', () => h.onSelect(b.id));
     paintChip(chip, b);
     dock.appendChild(chip);
     chips.set(b.id, chip);
   }
+
+  // moons of the chosen planet (or of the chosen moon's planet), above the dock
+  const moonsRow = document.createElement('div');
+  moonsRow.id = 'moons';
+  document.body.appendChild(moonsRow);
+  function renderMoons() {
+    const parentId = current ? current.parent ?? current.id : null;
+    const parent = parentId ? BODIES.find((b) => b.id === parentId)! : null;
+    const moons = parentId ? moonsOf(parentId) : [];
+    const show = moons.length > 0;
+    moonsRow.classList.toggle('show', show);
+    document.body.classList.toggle('has-moons', show);
+    if (!show || !parent) return;
+    moonsRow.innerHTML =
+      `<span class="moons-label">Супутники ${parent.nameGenitive ?? parent.name}</span>` +
+      moons
+        .map(
+          (m) =>
+            `<button class="moon-chip${current && m.id === current.id ? ' selected' : ''}" data-moon="${m.id}">` +
+            `<span class="moon-ball${iconClass(m)}" style="background:${iconBg(m)}"></span><span class="moon-name">${m.name}</span></button>`,
+        )
+        .join('');
+  }
+  moonsRow.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('[data-moon]') as HTMLElement | null;
+    if (btn) h.onSelect(btn.dataset.moon as BodyId);
+  });
 
   function paintChip(chip: HTMLElement, b: BodyInfo) {
     const ball = chip.querySelector('.chip-ball') as HTMLElement;
@@ -122,6 +172,11 @@ export function createUI(h: Handlers) {
     if (spoke) el.classList.add('speaking');
   }
   function onTalkTap(e: Event) {
+    const moonBtn = (e.target as HTMLElement).closest('[data-moon]') as HTMLElement | null;
+    if (moonBtn && info.contains(moonBtn)) {
+      h.onSelect(moonBtn.dataset.moon as BodyId);
+      return;
+    }
     const el = (e.target as HTMLElement).closest('.talk') as HTMLElement | null;
     if (!el || !info.contains(el)) return;
     if (el.dataset.structure) {
@@ -171,7 +226,7 @@ export function createUI(h: Handlers) {
             const value = esc(v).replace(/\n/g, '<br>');
             return k === STRUCTURE_LABEL
               ? `<div class="talk structure" role="button" tabindex="0" data-structure="1">${CUT_MARK}<dt>${k}</dt><dd>${value}</dd><p class="cut-hint">натисни — і зазирни всередину</p></div>`
-              : `<div class="talk" role="button" tabindex="0" data-say="${esc(NARRATION[b.id].stats[k] ?? `${k}: ${v}`)}">${SAY_MARK}<dt>${k}</dt><dd>${value}</dd></div>`;
+              : `<div class="talk" role="button" tabindex="0" data-say="${esc(NARRATION[b.id].stats[k] ?? `${k}: ${v}`)}">${SAY_MARK}<dt>${k}</dt><dd>${value}</dd>${k === 'Супутники' ? statMoons(b) : ''}</div>`;
           }).join('')}
         </dl>
         ${sizeCompare(b)}
@@ -287,21 +342,24 @@ export function createUI(h: Handlers) {
   return {
     setThumbnails(t: Record<string, string>) {
       thumbs = t;
-      for (const b of BODIES) paintChip(chips.get(b.id)!, b);
+      for (const [cid, chip] of chips) paintChip(chip, BODIES.find((b) => b.id === cid)!);
+      renderMoons();
       const scrollTop = info.scrollTop;
       renderInfo();
       info.scrollTop = scrollTop;
     },
     setSelected(id: BodyId | null) {
-      for (const [cid, chip] of chips) chip.classList.toggle('selected', cid === id);
-      if (id) {
-        chips.get(id)!.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      const next = id ? BODIES.find((b) => b.id === id)! : null;
+      const dockId = next ? next.parent ?? next.id : null; // a moon lights up its planet
+      for (const [cid, chip] of chips) chip.classList.toggle('selected', cid === dockId);
+      if (dockId) {
+        chips.get(dockId)!.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         hint.classList.add('gone');
       }
-      const next = id ? BODIES.find((b) => b.id === id)! : null;
       if (next !== current) factIndex = 0;
       current = next;
       document.body.classList.toggle('has-focus', !!current);
+      renderMoons();
       renderInfo();
     },
     setPlaying(p: boolean) {
