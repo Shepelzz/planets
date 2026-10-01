@@ -410,7 +410,7 @@ function frame(now: number) {
   adaptResolution(now);
   const dt = Math.min(rawDt, 0.1);
   if (playing) simTime += dt;
-  updateBodies(bodies, playing ? dt : 0, simTime, lines);
+  updateBodies(bodies, playing ? dt : 0, simTime, lines, camera.position);
   updateFlight(Math.min(rawDt, 0.5)); // flights run on wall-clock time even when frames stutter
   cutaway.update(Math.min(rawDt, 0.1));
   followFocus();

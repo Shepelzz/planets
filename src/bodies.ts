@@ -63,7 +63,39 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 
-const PLANET_FRAG = (surface: string) => /* glsl */ `
+// Earth's cloud cover. Close up (uFlow > 0) the winds come alive: a slowly changing swirl pushes the
+// map around (bounded, so it never smears) and clouds thicken and thin out. Far away it is the plain
+// map, so the overview costs nothing extra. p is the direction in the cloud shell's own space.
+const CLOUD_GLSL = /* glsl */ `
+uniform sampler2D uClouds;
+uniform float uFlow;
+float cloudCover(vec2 uv, vec3 p) {
+  if (uFlow <= 0.0) return texture2D(uClouds, uv).r;
+  float t = uTime * 0.07;
+  vec3 q = p * 2.4 + vec3(0.0, t, 0.0);
+  uv += vec2(snoise(q), snoise(q + vec3(19.1, 7.3, 3.7))) * vec2(0.006, 0.004) * uFlow;
+  float c = texture2D(uClouds, uv).r;
+  return c * (1.0 + snoise(p * 6.0 + vec3(t * 1.3, 0.0, -t)) * 0.3 * uFlow);
+}`;
+
+// Close up, clouds cast shadows on the ground: follow the ray towards the Sun up to the cloud shell
+// and look up the cloud cover there (uWorldToCloud turns a world direction into the shell's own space).
+const CLOUD_SHADOW_GLSL = /* glsl */ `
+${CLOUD_GLSL}
+uniform mat3 uWorldToCloud;
+float cloudShadow(vec3 rel, vec3 Ng, vec3 L) {
+  if (uFlow <= 0.0) return 1.0;
+  vec3 d = normalize(uWorldToCloud * (rel + L * (uRadius * 0.02 / max(dot(Ng, L), 0.2))));
+  // longitude from the direction, picking the branch without a jump so the seam keeps its mipmap
+  float phi = atan(d.z, -d.x) / 6.2831853;
+  float u1 = fract(phi);
+  float u2 = fract(phi + 0.5) - 0.5;
+  float u = fwidth(u1) <= fwidth(u2) ? u1 : u2;
+  vec2 uv = vec2(u, 1.0 - acos(clamp(d.y, -1.0, 1.0)) / 3.1415927);
+  return 1.0 - smoothstep(0.1, 0.9, cloudCover(uv, d)) * 0.45 * uFlow;
+}`;
+
+const PLANET_FRAG = (surface: string, cloudShadows = false) => /* glsl */ `
 uniform vec3 uSunPos;
 uniform float uTime;
 uniform float uRadius;
@@ -80,6 +112,7 @@ ${BUMP_GLSL}
 ${SRGB_GLSL}
 ${CUT_GLSL}
 ${surface}
+${cloudShadows ? CLOUD_SHADOW_GLSL : ''}
 
 float ringShadow(vec3 pos, vec3 L) {
   if (uHasRings < 0.5) return 1.0;
@@ -107,6 +140,7 @@ void main() {
   float terminator = smoothstep(-0.03, 0.12, geo);
   float diff = max(dot(N, L), 0.0) * terminator;
   float shadow = ringShadow(vWorldPos, L);
+  ${cloudShadows ? 'shadow *= cloudShadow(vWorldPos - uCenter, Ng, L);' : ''}
 
   vec3 sun = vec3(1.0, 0.97, 0.92) * 2.0;
   vec3 col = albedo * diff * shadow * sun;
@@ -130,15 +164,18 @@ void main() {
 
 const CLOUD_FRAG = /* glsl */ `
 uniform vec3 uSunPos;
-uniform sampler2D uClouds;
+uniform float uTime;
 uniform vec3 uCenter;
+varying vec3 vObjPos;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec2 vUv;
+${NOISE_GLSL}
 ${CUT_GLSL}
+${CLOUD_GLSL}
 void main() {
   cutAway(vWorldPos - uCenter);
-  float a = smoothstep(0.08, 0.95, texture2D(uClouds, vUv).r) * 0.95;
+  float a = smoothstep(0.08, 0.95, cloudCover(vUv, normalize(vObjPos))) * 0.95;
   vec3 N = normalize(vWorldNormal);
   vec3 L = normalize(uSunPos - vWorldPos);
   float geo = dot(N, L);
@@ -305,6 +342,15 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   return { info, anchor, tilt, mesh, viewRadius: info.radius * 1.4, orbitAngle: 0, spinAngle: 0, materials: [mat], cut };
 }
 
+/** Cloud shell radius; a little above the ground so close up it floats over the land. */
+const CLOUD_HEIGHT = 1.018;
+
+function cloudMap() {
+  const t = loadTexture('earth_clouds.jpg');
+  t.wrapS = THREE.RepeatWrapping; // the winds push the map across the date line (set before the first upload)
+  return t;
+}
+
 function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
   const anchor = new THREE.Group();
   const tilt = new THREE.Group();
@@ -325,10 +371,14 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     uCenter: { value: anchor.position },
     uHasRings: { value: hasRings ? 1 : 0 },
     uRingNormal: { value: new THREE.Vector3(0, 1, 0) },
+    // cloud shadows (Earth only), shared with the cloud shell
+    uClouds: { value: info.clouds ? cloudMap() : null },
+    uFlow: { value: 0 },
+    uWorldToCloud: { value: new THREE.Matrix3() },
   };
   const mat = new THREE.ShaderMaterial({
     vertexShader: VERT,
-    fragmentShader: PLANET_FRAG(SURFACES[info.surface!]),
+    fragmentShader: PLANET_FRAG(SURFACES[info.surface!], info.clouds),
     uniforms,
     extensions: { derivatives: true }, // dFdx/dFdy for bump mapping on WebGL 1
   });
@@ -342,13 +392,20 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     const cm = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: CLOUD_FRAG,
-      uniforms: { uSunPos: uniforms.uSunPos, uClouds: { value: loadTexture('earth_clouds.jpg') }, uCenter: { value: anchor.position }, ...cut },
+      uniforms: {
+        uSunPos: uniforms.uSunPos,
+        uTime: { value: 0 },
+        uClouds: uniforms.uClouds,
+        uFlow: uniforms.uFlow,
+        uCenter: { value: anchor.position },
+        ...cut,
+      },
       transparent: true,
       depthWrite: false,
     });
     materials.push(cm);
     clouds = new THREE.Mesh(sphereGeo, cm);
-    clouds.scale.setScalar(info.radius * 1.012);
+    clouds.scale.setScalar(info.radius * CLOUD_HEIGHT);
     tilt.add(clouds);
   }
 
@@ -447,8 +504,11 @@ export function createOrbitLines(scene: THREE.Scene, bodies: Body[]): Map<string
 
 const tmp = new THREE.Vector3();
 
+const cloudQuat = new THREE.Quaternion();
+const cloudRot = new THREE.Matrix4();
+
 /** Advance orbits and spins by dt seconds, then refresh positions and shader uniforms. */
-export function updateBodies(bodies: Body[], dt: number, time: number, lines: Map<string, THREE.LineLoop>) {
+export function updateBodies(bodies: Body[], dt: number, time: number, lines: Map<string, THREE.LineLoop>, viewer?: THREE.Vector3) {
   const byId = new Map(bodies.map((b) => [b.info.id, b]));
   for (const b of bodies) {
     const i = b.info;
@@ -471,5 +531,14 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     b.tilt.updateMatrixWorld(true);
     const u = b.materials[0].uniforms;
     if (u.uRingNormal) u.uRingNormal.value.set(0, 1, 0).applyQuaternion(b.tilt.getWorldQuaternion(new THREE.Quaternion()));
+    if (b.clouds) {
+      // living clouds only close up (and not on old devices): from about 14 planet radii in
+      const d = viewer ? viewer.distanceTo(b.anchor.position) / b.info.radius : Infinity;
+      u.uFlow.value = lowDetail ? 0 : 1 - THREE.MathUtils.smoothstep(d, 8, 14);
+      if (u.uFlow.value > 0) {
+        b.clouds.getWorldQuaternion(cloudQuat).invert();
+        u.uWorldToCloud.value.setFromMatrix4(cloudRot.makeRotationFromQuaternion(cloudQuat));
+      }
+    }
   }
 }
