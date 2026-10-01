@@ -392,6 +392,8 @@ h1.talk.speaking, .fact-text.talk.speaking { box-shadow: none; color: var(--acce
   .brand-text { display: none; }
   .brand { padding: 10px; }
   .info-body { display: block; }
+  /* one column: the side-by-side margins from the tablet layout no longer apply, use equal gaps */
+  .info-body .compare, .info-body .fact { margin-top: 12px; }
   .chip { width: 66px; }
   .chip-ball { width: 38px; height: 38px; }
   #hint { font-size: 14px; white-space: normal; text-align: center; width: max-content; max-width: calc(100vw - 32px); }

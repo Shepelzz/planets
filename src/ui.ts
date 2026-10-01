@@ -152,7 +152,7 @@ export function createUI(h: Handlers) {
         </dl>
         ${sizeCompare(b)}
         <section class="fact">
-          <h2>А ти знала?</h2>
+          <h2>А ти знаєш?</h2>
           <p class="fact-text talk" role="button" tabindex="0">${b.facts[factIndex % b.facts.length]}</p>
           <div class="fact-foot">
             <span class="dots">${b.facts.map((_, i) => `<i class="${i === factIndex % b.facts.length ? 'on' : ''}"></i>`).join('')}</span>
