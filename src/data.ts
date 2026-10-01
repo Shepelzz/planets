@@ -63,7 +63,7 @@ export const PHYSICS: BodyPhysics[] = [
     id: 'sun',
     icon: 'radial-gradient(circle at 40% 38%, #fff6d0 0%, #ffd35a 35%, #ff8a1f 75%, #c9460c 100%)',
     diameterKm: 1_392_000,
-    radius: 54, // not from the formula: big enough to stay clearly the largest
+    radius: 43, // not from the formula: big enough to stay clearly the largest (was 54: looked too huge)
     orbit: 0,
     orbitSeconds: 0,
     spinSeconds: 400,
