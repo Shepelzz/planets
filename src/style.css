@@ -509,8 +509,8 @@ body.has-moons { --moons-h: 58px; }
   align-items: center;
   max-width: calc(100vw - 24px);
   overflow-x: auto;
-  padding: 6px 8px 6px 14px;
-  border-radius: 18px;
+  padding: 6px;
+  border-radius: 20px;
   background: var(--glass);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
@@ -521,7 +521,6 @@ body.has-moons { --moons-h: 58px; }
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 #moons.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
-.moons-label { flex: 0 0 auto; margin-right: 8px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .moon-chip, .stat-moon {
   flex: 0 0 auto;
   border: 1px solid var(--line);
@@ -530,7 +529,8 @@ body.has-moons { --moons-h: 58px; }
   white-space: nowrap;
   text-align: left;
 }
-.moon-chip { margin-left: 6px; padding: 3px 12px 3px 3px; line-height: 0; }
+.moon-chip + .moon-chip { margin-left: 6px; }
+.moon-chip { padding: 3px 12px 3px 3px; line-height: 0; }
 .moon-chip:active, .stat-moon:active { transform: scale(0.95); }
 .moon-chip.selected { background: rgba(255, 210, 122, 0.2); border-color: rgba(255, 210, 122, 0.5); }
 .moon-ball { display: inline-block; vertical-align: middle; width: 28px; height: 28px; border-radius: 50%; box-shadow: inset -5px -4px 8px rgba(0, 0, 0, 0.5); }

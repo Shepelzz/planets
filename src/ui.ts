@@ -138,9 +138,8 @@ export function createUI(h: Handlers) {
     moonsRow.classList.toggle('show', show);
     document.body.classList.toggle('has-moons', show);
     if (!show || !parent) return;
-    moonsRow.innerHTML =
-      `<span class="moons-label">Супутники ${parent.nameGenitive ?? parent.name}</span>` +
-      moons
+    moonsRow.setAttribute('aria-label', `Супутники ${parent.nameGenitive ?? parent.name}`);
+    moonsRow.innerHTML = moons
         .map(
           (m) =>
             `<button class="moon-chip${current && m.id === current.id ? ' selected' : ''}" data-moon="${m.id}">` +
