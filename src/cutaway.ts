@@ -8,6 +8,11 @@ import { STRUCTURE } from './structure';
 
 const MAX_LAYERS = 5;
 const OPEN_SECONDS = 1.4;
+const CLOSE_SECONDS = 1.1;
+// after the story: a moment to look at all the layers, then the slice closes by itself
+const HOLD_AFTER_STORY = 2;
+const HOLD_AFTER_INTERRUPT = 0.4;
+const HOLD_WITHOUT_SOUND = 10;
 const FULL_ANGLE = Math.PI / 4; // half-angle of the removed wedge when fully open (a 90° slice)
 
 const FACE_VERT = /* glsl */ `
@@ -64,6 +69,9 @@ interface Active {
   atmosphereIntensity?: number;
   sequence: number;
   onEnd?: () => void;
+  /** when (this.time) the slice starts closing by itself */
+  closeAt?: number;
+  closing?: boolean;
 }
 
 export class Cutaway {
@@ -160,28 +168,30 @@ export class Cutaway {
   private tell(a: Active, intro: string, texts: string[]) {
     const seq = a.sequence;
     const count = texts.length;
-    const finish = () => {
+    // the story is over: show all layers, release the block, then close the slice after a pause
+    const finish = (hold: number) => {
       if (this.active !== a || a.sequence !== seq) return;
       this.material.uniforms.uHighlight.value = -1;
       a.labels.forEach((el) => {
         el.classList.add('show');
         el.classList.remove('current');
       });
+      a.closeAt = this.time + hold;
       const cb = a.onEnd;
       a.onEnd = undefined;
       cb?.();
     };
     const step = (i: number) => {
       if (this.active !== a || a.sequence !== seq) return;
-      if (i >= count) return finish();
+      if (i >= count) return finish(HOLD_AFTER_STORY);
       this.material.uniforms.uHighlight.value = count - 1 - i; // shader counts from the centre
       a.labels.forEach((el, j) => el.classList.toggle('current', j === i));
       a.labels[i].classList.add('show');
-      const spoke = say(texts[i], (interrupted) => (interrupted ? finish() : step(i + 1)));
-      if (!spoke) finish();
+      const spoke = say(texts[i], (interrupted) => (interrupted ? finish(HOLD_AFTER_INTERRUPT) : step(i + 1)));
+      if (!spoke) finish(HOLD_WITHOUT_SOUND);
     };
-    const spoke = say(intro, (interrupted) => (interrupted ? finish() : step(0)));
-    if (!spoke) finish(); // sound off: just show everything
+    const spoke = say(intro, (interrupted) => (interrupted ? finish(HOLD_AFTER_INTERRUPT) : step(0)));
+    if (!spoke) finish(HOLD_WITHOUT_SOUND); // sound off: show everything for a while
   }
 
   update(dt: number) {
@@ -190,7 +200,17 @@ export class Cutaway {
     const a = this.active;
     if (!a) return;
     this.aimAtCamera(a);
-    a.phi = Math.min(FULL_ANGLE, a.phi + (dt / OPEN_SECONDS) * FULL_ANGLE);
+    if (!a.closing && a.closeAt !== undefined && this.time >= a.closeAt) {
+      a.closing = true;
+      for (const el of a.labels) el.classList.remove('show');
+    }
+    if (a.closing) {
+      a.phi -= (dt / CLOSE_SECONDS) * FULL_ANGLE;
+      if (a.phi <= 0) {
+        this.close();
+        return;
+      }
+    } else a.phi = Math.min(FULL_ANGLE, a.phi + (dt / OPEN_SECONDS) * FULL_ANGLE);
     const k = a.phi / FULL_ANGLE;
     const phi = Math.max(0.01, FULL_ANGLE * (k * k * (3 - 2 * k))); // smoothstep easing
     const A = this.A.copy(a.right).multiplyScalar(Math.cos(phi)).addScaledVector(a.front, Math.sin(phi));
