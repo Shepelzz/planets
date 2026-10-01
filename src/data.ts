@@ -3,19 +3,7 @@ import type { SurfaceKind } from './surfaces.ts';
 export type BodyId =
   | 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
   | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon' | 'iss'
-  | 'phobos' | 'deimos' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'enceladus' | 'titan' | 'triton'
-  | 'jupiter_rocks' | 'saturn_rocks' | 'uranus_rocks' | 'neptune_rocks';
-
-/** Many small moons shown as one body: a few rocks circling in a band around the planet. */
-export interface Swarm {
-  /** rocks drawn */
-  count: number;
-  /** band, distance from the planet's centre */
-  inner: number;
-  outer: number;
-  /** rock colour (sRGB hex) */
-  colour: string;
-}
+  | 'phobos' | 'deimos' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'enceladus' | 'titan' | 'triton';
 
 export interface Atmosphere {
   color: [number, number, number];
@@ -52,9 +40,7 @@ export interface BodyPhysics {
   station?: boolean;
   /** not a ball but a lumpy potato: relative size along x, y, z (the largest is 1) */
   shape?: [number, number, number];
-  /** many small moons as one body (no size comparison, no cut-away; picked from the moons row only) */
-  swarm?: Swarm;
-  /** a moon or swarm circling in its planet's equatorial plane (tilted with the planet) */
+  /** a moon circling in its planet's equatorial plane (tilted with the planet) */
   equatorial?: boolean;
   /**
    * A big planet's moons are shown only while we visit it: from afar they would be specks, and the
@@ -264,20 +250,7 @@ export const PHYSICS: BodyPhysics[] = [
     parent: 'jupiter',
     equatorial: true,
   },
-  {
-    id: 'jupiter_rocks',
-    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
-    diameterKm: 10, // a typical small moon
-    radius: size(10.97), // the planet's: the camera keeps outside it
-    orbit: 0, // the band is centred on the planet
-    orbitSeconds: 0,
-    spinSeconds: 0,
-    tilt: 0,
-    startAngle: 0,
-    parent: 'jupiter',
-    equatorial: true,
-    swarm: { count: 18, inner: 62, outer: 68, colour: '#8f8276' },
-  },
+
   {
     id: 'saturn',
     icon: 'radial-gradient(circle at 35% 35%, #fbefcf 0%, #dcc08a 55%, #8e7447 100%)',
@@ -322,20 +295,7 @@ export const PHYSICS: BodyPhysics[] = [
     equatorial: true,
     atmosphere: { color: [1.0, 0.62, 0.22], scale: 1.09, intensity: 1.1 }, // thick orange haze
   },
-  {
-    id: 'saturn_rocks',
-    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
-    diameterKm: 10, // a typical small moon
-    radius: size(9.14), // the planet's: the camera keeps outside it
-    orbit: 0, // the band is centred on the planet
-    orbitSeconds: 0,
-    spinSeconds: 0,
-    tilt: 0,
-    startAngle: 0,
-    parent: 'saturn',
-    equatorial: true,
-    swarm: { count: 20, inner: 79, outer: 87, colour: '#a39787' },
-  },
+
   {
     id: 'uranus',
     icon: 'radial-gradient(circle at 35% 35%, #e6fbff 0%, #9fdde6 50%, #4d8f9c 100%)',
@@ -350,20 +310,7 @@ export const PHYSICS: BodyPhysics[] = [
     atmosphere: { color: [0.6, 0.9, 1.0], scale: 1.04, intensity: 0.9 },
     moonsWhenNear: true,
   },
-  {
-    id: 'uranus_rocks',
-    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
-    diameterKm: 10, // a typical small moon
-    radius: size(3.98), // the planet's: the camera keeps outside it
-    orbit: 0, // the band is centred on the planet
-    orbitSeconds: 0,
-    spinSeconds: 0,
-    tilt: 0,
-    startAngle: 0,
-    parent: 'uranus',
-    equatorial: true,
-    swarm: { count: 16, inner: 24, outer: 32, colour: '#8c8c94' },
-  },
+
   {
     id: 'neptune',
     icon: 'radial-gradient(circle at 35% 35%, #bcd3ff 0%, #3f6fe0 50%, #16307a 100%)',
@@ -393,20 +340,7 @@ export const PHYSICS: BodyPhysics[] = [
     equatorial: true,
     // orbits backwards (negative period), the only big moon that does
   },
-  {
-    id: 'neptune_rocks',
-    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
-    diameterKm: 10, // a typical small moon
-    radius: size(3.86), // the planet's: the camera keeps outside it
-    orbit: 0, // the band is centred on the planet
-    orbitSeconds: 0,
-    spinSeconds: 0,
-    tilt: 0,
-    startAngle: 0,
-    parent: 'neptune',
-    equatorial: true,
-    swarm: { count: 14, inner: 33, outer: 40, colour: '#86868e' },
-  },
+
   {
     id: 'pluto',
     dwarf: true,

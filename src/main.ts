@@ -64,7 +64,7 @@ const systemReach = new Map<BodyId, number>();
 for (const b of bodies) {
   const p = b.info.parent;
   if (!p || !byId.get(p)!.info.moonsWhenNear) continue;
-  const reach = b.info.swarm ? b.info.swarm.outer + 1.5 : b.info.orbit + b.info.radius;
+  const reach = b.info.orbit + b.info.radius;
   systemReach.set(p, Math.max(systemReach.get(p) ?? 0, reach));
 }
 // While visiting a planet with moons, the orbits make room for its moon system: the planet itself
@@ -224,8 +224,6 @@ function focusOffset(b: Body) {
   const dir = toSun.multiplyScalar(0.62).addScaledVector(side, 0.78).addScaledVector(up, 0.2).normalize();
   if (b.info.id === 'sun') dir.set(0.3, 0.25, 1).normalize();
   if (b.info.rings) dir.addScaledVector(up, 0.25).normalize();
-  // a swarm: close enough that the rocks read as rocks, with the planet in the middle of the band
-  if (b.swarm) return dir.addScaledVector(up, 0.3).normalize().multiplyScalar(fitDistance(b.viewRadius * 0.62));
   return dir.multiplyScalar(fitDistance(b.viewRadius));
 }
 
@@ -347,7 +345,7 @@ function pick(px: number, py: number): Body | null {
   let best: Body | null = null;
   let bestDist = Infinity;
   for (const b of bodies) {
-    if (!b.anchor.visible || b.swarm) continue; // a swarm is chosen from the moons row
+    if (!b.anchor.visible) continue;
     const s = screenInfo(b);
     if (s.behind) continue;
     const reach = Math.max(s.pxRadius, 26);
@@ -455,7 +453,7 @@ function occluded(b: Body) {
   const dist = toBody.length();
   toBody.divideScalar(dist);
   for (const o of bodies) {
-    if (o === b || o.swarm || !o.anchor.visible || o.info.radius <= b.info.radius) continue;
+    if (o === b || !o.anchor.visible || o.info.radius <= b.info.radius) continue;
     toOther.subVectors(o.anchor.position, camera.position);
     const along = toOther.dot(toBody);
     if (along <= 0 || along >= dist) continue;
@@ -468,7 +466,7 @@ function updateLabels() {
   for (const b of bodies) {
     const el = labels.get(b.info.id)!;
     const s = screenInfo(b);
-    let show = b.anchor.visible && !b.swarm && !s.behind && s.pxRadius < 90 && b !== focus && !flight && !occluded(b);
+    let show = b.anchor.visible && !s.behind && s.pxRadius < 90 && b !== focus && !flight && !occluded(b);
     // a moon or station drawn right next to its planet: the planet's label is enough
     if (b.info.parent && byId.get(b.info.parent) !== focus) {
       const p = screenInfo(byId.get(b.info.parent)!);

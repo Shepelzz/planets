@@ -4,7 +4,6 @@ import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
 import { loadTexture, SRGB_GLSL } from './textures';
 import { makeStation, trackSun, type Station } from './station';
-import { makeSwarm, updateSwarm, type SwarmView } from './swarm';
 import { loadStationModel, turnWings, type RealStation } from './stationModel';
 
 const DEG = Math.PI / 180;
@@ -40,8 +39,6 @@ export interface Body {
   clouds?: THREE.Mesh;
   /** a spacecraft: flies nose first, turns its wings to the Sun, hides in Earth's shadow */
   station?: Station & { occluder: THREE.Vector4; real?: RealStation; loading?: boolean };
-  /** many small moons as one body: rocks circling the planet */
-  swarm?: SwarmView;
   /** Radius that must fit on screen when we fly to this body (rings included). */
   viewRadius: number;
   orbitAngle: number;
@@ -501,23 +498,6 @@ function lumpyGeometry(shape: [number, number, number], id: string) {
   return g;
 }
 
-/** Many small moons around a planet: a band of rocks in the planet's equatorial plane. */
-function makeSwarmBody(info: BodyInfo, scene: THREE.Scene): Body {
-  const anchor = new THREE.Group();
-  const tilt = new THREE.Group();
-  tilt.rotation.z = (BODIES.find((p) => p.id === info.parent)!.tilt * DEG);
-  anchor.add(tilt);
-  let seed = 0;
-  for (const ch of info.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-  const swarm = makeSwarm(info.swarm!, seed, new THREE.Vector3());
-  tilt.add(swarm.group);
-  scene.add(anchor);
-  return {
-    info, anchor, tilt, mesh: swarm.group, viewRadius: info.swarm!.outer, orbitAngle: 0, spinAngle: 0,
-    materials: [swarm.material], cut: makeCutUniforms(), swarm,
-  };
-}
-
 function makeStationBody(info: BodyInfo, scene: THREE.Scene): Body {
   const anchor = new THREE.Group();
   const tilt = new THREE.Group(); // carries the flight attitude, set every frame
@@ -538,7 +518,6 @@ export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
   return BODIES.map((info) =>
     info.id === 'sun' ? makeSun(info, scene)
       : info.station ? makeStationBody(info, scene)
-      : info.swarm ? makeSwarmBody(info, scene)
       : makePlanet(info, scene));
 }
 
@@ -639,8 +618,7 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
     b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position, b.orbitR ?? i.orbit)).add(origin);
-    if (b.swarm) updateSwarm(b.swarm, dt);
-    else if (b.station) flyNoseFirst(b, parent!, viewer);
+    if (b.station) flyNoseFirst(b, parent!, viewer);
     // moons (the Moon, Charon) keep one face towards their planet
     else b.mesh.rotation.y = parent ? b.orbitAngle + Math.PI : b.spinAngle;
     if (b.clouds) b.clouds.rotation.y = b.spinAngle * 1.08;
