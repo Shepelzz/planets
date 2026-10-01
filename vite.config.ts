@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import YAML from 'yaml';
 
@@ -38,9 +40,47 @@ function texts(): Plugin {
   };
 }
 
+// Planet maps and models are served as immutable (render.yaml), so the app asks for them with a
+// fingerprint of the file: textures/mars.jpg?v=1a2b3c4d. A replaced file gets a new URL and every
+// browser fetches it right away; unchanged files stay cached. `import versions from
+// 'virtual:asset-versions'` gives { 'textures/mars.jpg': '1a2b3c4d', … }.
+function assetVersions(): Plugin {
+  const id = 'virtual:asset-versions';
+  const publicDir = new URL('./public/', import.meta.url).pathname;
+  const dirs = ['textures', 'models'];
+  const scan = () => {
+    const out: Record<string, string> = {};
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (!name.startsWith('.'))
+          out[relative(publicDir, path)] = createHash('sha1').update(readFileSync(path)).digest('hex').slice(0, 8);
+      }
+    };
+    for (const d of dirs) walk(join(publicDir, d));
+    return out;
+  };
+  return {
+    name: 'asset-versions',
+    resolveId: (source) => (source === id ? '\0' + id : null),
+    load: (key) => (key === '\0' + id ? `export default ${JSON.stringify(scan())};` : null),
+    configureServer(server) {
+      // a map or model replaced while the dev server runs: new fingerprints, reload the page
+      server.watcher.add(dirs.map((d) => join(publicDir, d)));
+      server.watcher.on('change', (file) => {
+        if (!dirs.some((d) => file.startsWith(join(publicDir, d)))) return;
+        const mod = server.moduleGraph.getModuleById('\0' + id);
+        if (mod) server.moduleGraph.invalidateModule(mod);
+        server.ws.send({ type: 'full-reload' });
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [siteUrl(), texts()],
+  plugins: [siteUrl(), texts(), assetVersions()],
   server: { port: 5210, strictPort: true, host: true },
   build: {
     // old iPads stay on iOS 12 (Safari 12): lower modern JS syntax and CSS for them

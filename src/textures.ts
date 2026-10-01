@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from './assets';
 
 export const loadingManager = new THREE.LoadingManager();
 const loader = new THREE.TextureLoader(loadingManager);
@@ -21,7 +22,7 @@ export function loadTexture(file: string): THREE.Texture {
   let t = cache.get(file);
   if (!t) {
     const dir = lite && LITE_FILES.has(file) ? 'textures/lite/' : 'textures/';
-    t = loader.load(`${import.meta.env.BASE_URL}${dir}${file}`);
+    t = loader.load(assetUrl(dir + file));
     t.colorSpace = THREE.NoColorSpace;
     t.anisotropy = 8; // three clamps this to what the GPU supports
     cache.set(file, t);

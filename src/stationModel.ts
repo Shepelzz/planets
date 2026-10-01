@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { assetUrl } from './assets';
 import { SRGB_GLSL } from './textures';
 
 // The real ISS: NASA's model (public domain), slimmed down by scripts/iss-model.mjs. Loaded only when
@@ -73,7 +74,7 @@ export async function loadStationModel(
 ): Promise<RealStation> {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${file}`);
+  const gltf = await loader.loadAsync(assetUrl(`models/${file}`));
 
   const model = new THREE.Group();
   // file axes → station frame: −x is the nose (x), z the truss (y), y up (z)
