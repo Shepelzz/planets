@@ -505,7 +505,7 @@ body.low-end * {
 }
 .chip.selected .chip-badge { color: var(--accent); border-color: rgba(255, 210, 122, 0.5); }
 
-body.has-moons { --moons-h: 58px; }
+body.has-moons { --moons-h: 70px; } /* the row (44 px buttons: 58 px) + the same 12 px gap as above the dock */
 #moons {
   position: fixed;
   left: 50%;

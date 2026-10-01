@@ -124,7 +124,7 @@ onAddressChange(() => flyTo(bodyFromPath(), undefined, 'none'));
 listenForTaps(canvas, (x, y) => {
   const b = pickBody(camera, bodies, x, y);
   if (!b) ui.hideInfo(); // tap on empty space puts the card away
-  else if (b === director.focus) ui.showInfo();
+  else if (b === director.focus) ui.toggleInfo(); // tap the body we are at: card away, or back again
   else flyTo(b, undefined, 'push', 'hidden'); // just go there; the card waits for a second tap
 });
 // stop Safari's page pinch-zoom from fighting the 3D pinch
