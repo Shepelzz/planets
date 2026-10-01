@@ -2,12 +2,12 @@
 import 'pepjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createBodies, createOrbitLines, loadRealStation, updateBodies, type Body } from './bodies';
+import { createBodies, createOrbitLines, loadRealStation, showDetail, updateBodies, type Body } from './bodies';
 import type { BodyId } from './data';
 import { createSky } from './sky';
 import { createUI } from './ui';
 import { Cutaway } from './cutaway';
-import { loadingManager, useLiteTextures } from './textures';
+import { loadingManager, setDetailAllowed } from './textures';
 import { renderThumbnails } from './thumbnails';
 import { NARRATION, UI } from './content';
 import { preload, say } from './speech';
@@ -26,7 +26,7 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: 'high-performance',
   context: forceWebGL1 ? (canvas.getContext('webgl', { antialias: false }) as WebGLRenderingContext) : undefined,
 });
-useLiteTextures(lowEnd);
+setDetailAllowed(!lowEnd);
 document.body.classList.toggle('low-end', lowEnd);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -254,6 +254,8 @@ function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 
   showAddress(b, address);
   cutaway.close();
   if (b?.station) loadRealStation(b); // fetch the detailed model while we fly
+  // the 4K map of where we are going (for the ISS: Earth below it)
+  showDetail(b?.station ? byId.get(b.info.parent!)! : b);
   if (b) say(NARRATION[b.info.id].intro);
   ui.setSelected(b ? b.info.id : null); // first, so the panel's size is known for framing
   flight = {

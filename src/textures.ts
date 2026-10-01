@@ -3,31 +3,49 @@ import { assetUrl } from './assets';
 
 export const loadingManager = new THREE.LoadingManager();
 const loader = new THREE.TextureLoader(loadingManager);
+const detailLoader = new THREE.TextureLoader(); // close-up maps: not part of the start-up progress
 const cache = new Map<string, THREE.Texture>();
 
-// 2K copies of the 4K maps, for old WebGL 1 devices (e.g. 1 GB iPads on iOS 12).
+// The heaviest maps exist in two sizes: 2K in textures/lite/ and 4K in textures/. Every device starts
+// with the 2K ones (a fraction of the download and of the video memory: 4K maps of all bodies at once
+// took ~400 MB, enough for Safari to reload the tab on 2–3 GB iPads). The body we fly to gets its 4K
+// map while we are there (bodies.ts: showDetail), except on old WebGL 1 devices.
 const LITE_FILES = new Set(['earth_day.jpg', 'earth_clouds.jpg', 'moon.jpg', 'mars.jpg', 'jupiter.jpg', 'milky_way.jpg', 'pluto.jpg']);
-let lite = false;
+let detailAllowed = true;
 
-/** Call before any texture is requested. */
-export function useLiteTextures(on: boolean) {
-  lite = on;
+/** Old devices (WebGL 1, 1 GB iPads): never load the 4K maps. Call before any texture is requested. */
+export function setDetailAllowed(on: boolean) {
+  detailAllowed = on;
+}
+
+function prepare(t: THREE.Texture) {
+  t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = 8; // three clamps this to what the GPU supports
+  return t;
 }
 
 /**
- * Load a map from public/textures. Maps are uploaded as raw bytes (no sRGB format) so WebGL 1
- * keeps mipmaps; shaders decode colour maps with srgbToLinear() from SRGB_GLSL.
+ * Load a map from public/textures (2K if there is a 2K copy, unless `full` asks for the big one where
+ * allowed). Maps are uploaded as raw bytes (no sRGB format) so WebGL 1 keeps mipmaps; shaders decode
+ * colour maps with srgbToLinear() from SRGB_GLSL.
  */
-export function loadTexture(file: string): THREE.Texture {
-  let t = cache.get(file);
+export function loadTexture(file: string, opts: { full?: boolean } = {}): THREE.Texture {
+  const big = !LITE_FILES.has(file) || (opts.full && detailAllowed);
+  const path = (big ? 'textures/' : 'textures/lite/') + file;
+  let t = cache.get(path);
   if (!t) {
-    const dir = lite && LITE_FILES.has(file) ? 'textures/lite/' : 'textures/';
-    t = loader.load(assetUrl(dir + file));
-    t.colorSpace = THREE.NoColorSpace;
-    t.anisotropy = 8; // three clamps this to what the GPU supports
-    cache.set(file, t);
+    t = prepare(loader.load(assetUrl(path)));
+    cache.set(path, t);
   }
   return t;
+}
+
+/** True if this map has a sharper version to load for close-ups on this device. */
+export const hasDetail = (file: string) => detailAllowed && LITE_FILES.has(file);
+
+/** The 4K version of a map, loaded on its own (not cached: the caller disposes it when leaving). */
+export function loadDetail(file: string): Promise<THREE.Texture> {
+  return detailLoader.loadAsync(assetUrl('textures/' + file)).then(prepare);
 }
 
 export const SRGB_GLSL = /* glsl */ `

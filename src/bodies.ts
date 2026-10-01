@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BODIES, type BodyInfo } from './content';
 import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
-import { loadTexture, SRGB_GLSL } from './textures';
+import { hasDetail, loadDetail, loadTexture, SRGB_GLSL } from './textures';
 import { makeStation, trackSun, type Station } from './station';
 import { loadStationModel, turnWings, type RealStation } from './stationModel';
 
@@ -350,6 +350,44 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   scene.add(anchor);
 
   return { info, anchor, tilt, mesh, viewRadius: info.radius * 1.4, orbitAngle: 0, spinAngle: 0, materials: [mat], cut };
+}
+
+// ---------- close-up maps ----------
+// Only the body we visit gets its 4K maps; leaving it puts the 2K ones back and frees the big ones.
+interface Detail {
+  body: Body;
+  swaps: { uniform: { value: THREE.Texture | null }; base: THREE.Texture; big?: THREE.Texture }[];
+}
+let detail: Detail | null = null;
+
+export function showDetail(b: Body | null) {
+  if (detail?.body === b) return;
+  if (detail) {
+    for (const s of detail.swaps) {
+      s.uniform.value = s.base;
+      s.big?.dispose();
+    }
+    detail = null;
+  }
+  if (!b || !b.info.surface) return;
+  const u = b.materials[0].uniforms;
+  const maps: [string, string][] = [['uMap', TEXTURE_FILES[b.info.surface]]];
+  if (b.info.clouds) maps.push(['uClouds', 'earth_clouds.jpg']);
+  const mine: Detail = { body: b, swaps: [] };
+  detail = mine;
+  for (const [name, file] of maps) {
+    if (!hasDetail(file) || !u[name]) continue;
+    const swap: Detail['swaps'][number] = { uniform: u[name], base: u[name].value };
+    mine.swaps.push(swap);
+    loadDetail(file)
+      .then((big) => {
+        if (detail !== mine) return big.dispose(); // already gone elsewhere
+        big.wrapS = swap.base.wrapS; // the clouds wrap around the date line
+        swap.big = big;
+        swap.uniform.value = big;
+      })
+      .catch(() => {}); // keep the 2K map
+  }
 }
 
 /** Cloud shell radius; a little above the ground so close up it floats over the land. */

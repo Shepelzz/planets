@@ -97,7 +97,8 @@ export function createSky(): { group: THREE.Group; setPixelRatio: (r: number) =>
 
   // ---- Milky Way panorama (real all-sky map), dimmed so it stays a backdrop ----
   const skyMat = new THREE.ShaderMaterial({
-    uniforms: { uMap: { value: loadTexture('milky_way.jpg') } },
+    // the Milky Way surrounds every view: 4K on computers; 2K on tablets and phones (video memory)
+    uniforms: { uMap: { value: loadTexture('milky_way.jpg', { full: navigator.maxTouchPoints < 2 }) } },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main() {
