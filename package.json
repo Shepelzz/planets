@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "voice": "node scripts/build-voice.ts",
     "voice:el": "node scripts/voice-elevenlabs.ts",
-    "voice:all": "npm run voice && npm run voice:el"
+    "voice:all": "npm run voice && npm run voice:el",
+    "check": "tsc --noEmit -p . && vite build && npx --yes acorn@8 --ecma2017 --module --silent dist/assets/*.js && echo 'check: ok (types, build, Safari 12 syntax)'"
   },
   "dependencies": {
     "pepjs": "^0.5.3",
