@@ -20,3 +20,143 @@ services:
       - path: /voice/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
+    # every address has its own page (own link preview), see pages() in vite.config.ts
+    routes:
+      - type: rewrite
+        source: /solar-system
+        destination: /solar-system.html
+      - type: rewrite
+        source: /solar-system/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /sun
+        destination: /sun.html
+      - type: rewrite
+        source: /sun/
+        destination: /sun.html
+      - type: rewrite
+        source: /mercury
+        destination: /mercury.html
+      - type: rewrite
+        source: /mercury/
+        destination: /mercury.html
+      - type: rewrite
+        source: /venus
+        destination: /venus.html
+      - type: rewrite
+        source: /venus/
+        destination: /venus.html
+      - type: rewrite
+        source: /earth
+        destination: /earth.html
+      - type: rewrite
+        source: /earth/
+        destination: /earth.html
+      - type: rewrite
+        source: /moon
+        destination: /moon.html
+      - type: rewrite
+        source: /moon/
+        destination: /moon.html
+      - type: rewrite
+        source: /iss
+        destination: /iss.html
+      - type: rewrite
+        source: /iss/
+        destination: /iss.html
+      - type: rewrite
+        source: /mars
+        destination: /mars.html
+      - type: rewrite
+        source: /mars/
+        destination: /mars.html
+      - type: rewrite
+        source: /phobos
+        destination: /phobos.html
+      - type: rewrite
+        source: /phobos/
+        destination: /phobos.html
+      - type: rewrite
+        source: /deimos
+        destination: /deimos.html
+      - type: rewrite
+        source: /deimos/
+        destination: /deimos.html
+      - type: rewrite
+        source: /jupiter
+        destination: /jupiter.html
+      - type: rewrite
+        source: /jupiter/
+        destination: /jupiter.html
+      - type: rewrite
+        source: /io
+        destination: /io.html
+      - type: rewrite
+        source: /io/
+        destination: /io.html
+      - type: rewrite
+        source: /europa
+        destination: /europa.html
+      - type: rewrite
+        source: /europa/
+        destination: /europa.html
+      - type: rewrite
+        source: /ganymede
+        destination: /ganymede.html
+      - type: rewrite
+        source: /ganymede/
+        destination: /ganymede.html
+      - type: rewrite
+        source: /callisto
+        destination: /callisto.html
+      - type: rewrite
+        source: /callisto/
+        destination: /callisto.html
+      - type: rewrite
+        source: /saturn
+        destination: /saturn.html
+      - type: rewrite
+        source: /saturn/
+        destination: /saturn.html
+      - type: rewrite
+        source: /enceladus
+        destination: /enceladus.html
+      - type: rewrite
+        source: /enceladus/
+        destination: /enceladus.html
+      - type: rewrite
+        source: /titan
+        destination: /titan.html
+      - type: rewrite
+        source: /titan/
+        destination: /titan.html
+      - type: rewrite
+        source: /uranus
+        destination: /uranus.html
+      - type: rewrite
+        source: /uranus/
+        destination: /uranus.html
+      - type: rewrite
+        source: /neptune
+        destination: /neptune.html
+      - type: rewrite
+        source: /neptune/
+        destination: /neptune.html
+      - type: rewrite
+        source: /triton
+        destination: /triton.html
+      - type: rewrite
+        source: /triton/
+        destination: /triton.html
+      - type: rewrite
+        source: /pluto
+        destination: /pluto.html
+      - type: rewrite
+        source: /pluto/
+        destination: /pluto.html
+      - type: rewrite
+        source: /charon
+        destination: /charon.html
+      - type: rewrite
+        source: /charon/
+        destination: /charon.html

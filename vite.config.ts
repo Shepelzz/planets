@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import YAML from 'yaml';
@@ -78,9 +78,78 @@ function assetVersions(): Plugin {
   };
 }
 
+// One page per address — /solar-system and /<body> (/earth, /moon, /iss…) — each a copy of index.html with
+// its own title, description and link-preview card (og:*, twitter:*), because messengers read the
+// page's tags and run no scripts. Card images: public/og/<id>.jpg (made with space.makeOgCards() in
+// the dev console); the system page keeps public/og.jpg. render.yaml must map every path to its
+// page: the build stops if one is missing.
+function pages(): Plugin {
+  const root = new URL('./', import.meta.url).pathname;
+  const site = (process.env.SITE_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const fingerprint = (file: string) => createHash('sha1').update(readFileSync(file)).digest('hex').slice(0, 8);
+  const setMeta = (html: string, attr: 'name' | 'property', key: string, value: string) =>
+    html.replace(new RegExp(`(<meta ${attr}="${key}" content=")[^"]*(")`), (_, a: string, b: string) => a + esc(value) + b);
+  return {
+    name: 'pages',
+    apply: 'build',
+    writeBundle(options) {
+      const out = options.dir ?? join(root, 'dist');
+      const base = readFileSync(join(out, 'index.html'), 'utf8');
+      const data = YAML.parse(readFileSync(join(root, 'texts.yaml'), 'utf8'));
+      const ui = data.ui as Record<string, string>;
+      const routes = readFileSync(join(root, 'render.yaml'), 'utf8');
+      const image = (id: string | null) => {
+        const file = id && existsSync(join(root, 'public', 'og', `${id}.jpg`)) ? `og/${id}.jpg` : 'og.jpg';
+        return `${site}/${file}?v=${fingerprint(join(root, 'public', file))}`;
+      };
+      const page = (path: string, title: string, description: string, img: string, alt: string) => {
+        if (!routes.includes(`source: /${path}\n`)) throw new Error(`render.yaml: no route for /${path} (add a rewrite to /${path}.html)`);
+        let html = base.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
+        html = setMeta(html, 'name', 'description', description);
+        for (const [k, v] of [['og:title', title], ['og:description', description], ['og:url', `${site}/${path}`], ['og:image', img], ['og:image:alt', alt]])
+          html = setMeta(html, 'property', k, v);
+        for (const [k, v] of [['twitter:title', title], ['twitter:description', description], ['twitter:image', img]])
+          html = setMeta(html, 'name', k, v);
+        writeFileSync(join(out, `${path}.html`), html);
+      };
+      page('solar-system', ui.title, ui.share_description, image(null), ui.share_image_alt);
+      for (const [id, b] of Object.entries(data.bodies as Record<string, { name: string; kind: string; intro: string }>))
+        page(id, `${b.name} — ${ui.title}`, b.intro, image(id), `${b.name}: ${b.kind}`);
+    },
+  };
+}
+
+// Dev only: space.makeOgCards() posts each finished card here; saved as public/og/<id>.jpg.
+function ogCards(): Plugin {
+  return {
+    name: 'og-cards',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__og/', (req, res) => {
+        const id = (req.url ?? '').replace(/^\//, '');
+        if (req.method !== 'POST' || !/^[a-z_]+$/.test(id)) {
+          res.statusCode = 400;
+          res.end();
+          return;
+        }
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', () => {
+          const dir = new URL('./public/og/', import.meta.url).pathname;
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(join(dir, `${id}.jpg`), Buffer.concat(chunks));
+          res.end('ok');
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  base: './',
-  plugins: [siteUrl(), texts(), assetVersions()],
+  // absolute paths: pages live at /earth, /solar-system… and must still find /assets, /voice, /textures
+  base: '/',
+  plugins: [siteUrl(), texts(), assetVersions(), pages(), ogCards()],
   server: { port: 5210, strictPort: true, host: true },
   build: {
     // old iPads stay on iOS 12 (Safari 12): lower modern JS syntax and CSS for them

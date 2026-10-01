@@ -229,7 +229,29 @@ function focusOffset(b: Body) {
   return dir.multiplyScalar(fitDistance(b.viewRadius));
 }
 
-function flyTo(b: Body | null, duration?: number) {
+// ---------- addresses ----------
+// Every view has its own path: /solar-system for the whole Solar System, /earth, /moon, /iss… for a body.
+// A link opens straight at that body; back/forward (and the iPad's swipe back) move between visited
+// ones. Each path also has its own page with its own link preview (vite.config.ts, render.yaml).
+const SYSTEM_PATH = 'solar-system';
+const pathOf = (b: Body | null) => `/${b ? b.info.id : SYSTEM_PATH}`;
+/** the body named by the address: null for /solar-system, the root or anything unknown */
+function bodyFromPath(): Body | null {
+  const seg = decodeURIComponent(location.pathname.replace(/\/+$/, '').split('/').pop() ?? '');
+  return byId.get(seg as BodyId) ?? null;
+}
+function showAddress(b: Body | null, how: 'push' | 'replace' | 'none') {
+  document.title = b ? `${b.info.name} — ${UI.title}` : UI.title;
+  const path = pathOf(b);
+  if (how === 'none' || location.pathname === path) return;
+  const url = path + location.search; // keep test flags like ?webgl1
+  if (how === 'push') history.pushState(null, '', url);
+  else history.replaceState(null, '', url);
+}
+window.addEventListener('popstate', () => flyTo(bodyFromPath(), undefined, 'none'));
+
+function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 'none' = 'push') {
+  showAddress(b, address);
   cutaway.close();
   if (b?.station) loadRealStation(b); // fetch the detailed model while we fly
   if (b) say(NARRATION[b.info.id].intro);
@@ -484,11 +506,15 @@ updateBodies(bodies, 0, 0, lines);
 camera.position.copy(OVERVIEW_OFFSET).multiplyScalar(1.6);
 controls.target.set(0, 0, 0);
 configureLimits();
-flyTo(null);
-ui.setSelected(null);
+{
+  // open at the body in the address (a shared link), or the whole system
+  const start = bodyFromPath();
+  flyTo(start, undefined, 'replace');
+  if (!start) ui.setSelected(null);
+}
 
 // debug handle
-(window as unknown as { space: unknown }).space = { scene, lowEnd, getPixelRatio: () => pixelRatio, renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d) };
+(window as unknown as { space: unknown }).space = { scene, lowEnd, getPixelRatio: () => pixelRatio, renderer, bodies, camera, controls, flyTo: (id: BodyId | null, d?: number) => flyTo(id ? byId.get(id)! : null, d), ...(import.meta.env.DEV ? { makeOgCards } : {}) };
 
 // ---------- loop ----------
 let lastNow = performance.now();
@@ -512,6 +538,89 @@ function adaptResolution(now: number) {
 }
 let simTime = 0;
 let loaded = false;
+// ---------- link-preview cards (dev only: space.makeOgCards() in the console) ----------
+// Each body photographed by the real renderer at 1200×630, planet on the right, name on the left;
+// the dev server saves them as public/og/<id>.jpg for the pages' og:image (vite.config.ts).
+let ogShot: ((png: string) => void) | null = null;
+function takeOgShot() {
+  const b = focus!;
+  const keep = { pos: camera.position.clone(), aspect: camera.aspect, near: camera.near };
+  const W = 1200, H = 630;
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+  camera.aspect = W / H;
+  const dir = keep.pos.clone().sub(controls.target).normalize();
+  // ringed planets: let the rings run wide, so the ball itself is big enough
+  const r = b.info.rings ? b.viewRadius * 0.62 : b.viewRadius;
+  const dist = r / Math.sin(Math.atan(Math.tan((camera.fov * Math.PI) / 360) * 0.66));
+  camera.position.copy(controls.target).addScaledVector(dir, dist);
+  camera.lookAt(controls.target);
+  camera.near = Math.max(0.01, (dist - b.viewRadius) * 0.2);
+  camera.setViewOffset(W, H, -W * 0.2, 0, W, H); // the body sits right of centre, text goes left
+  sky.group.position.copy(camera.position);
+  // only the body and its own moons: no other planets or orbit lines behind the title
+  const home = focus!.info.parent ?? focus!.info.id;
+  const hidden: THREE.Object3D[] = [];
+  for (const o of bodies) if ((o.info.parent ?? o.info.id) !== home && o.anchor.visible) hidden.push(o.anchor);
+  for (const l of lines.values()) if (l.visible) hidden.push(l);
+  for (const o of hidden) o.visible = false;
+  renderer.render(scene, camera);
+  const png = renderer.domElement.toDataURL('image/png');
+  for (const o of hidden) o.visible = true;
+  camera.position.copy(keep.pos);
+  camera.aspect = keep.aspect;
+  camera.near = keep.near;
+  camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+  resize();
+  return png;
+}
+
+async function makeOgCards(ids?: BodyId[]) {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const load = (src: string) => new Promise<HTMLImageElement>((r) => { const i = new Image(); i.onload = () => r(i); i.src = src; });
+  ui.hideInfo();
+  for (const id of ids ?? bodies.map((b) => b.info.id)) {
+    const b = byId.get(id)!;
+    flyTo(b, 0.01, 'none');
+    ui.hideInfo();
+    for (let i = 0; i < 120 && (flight || (b.station && !b.station.real)); i++) await wait(50);
+    await wait(1500); // orbits make room, moons appear
+    const png = await new Promise<string>((r) => (ogShot = r));
+    const c = document.createElement('canvas');
+    c.width = 1200;
+    c.height = 630;
+    const g = c.getContext('2d')!;
+    g.drawImage(await load(png), 0, 0);
+    const shade = g.createLinearGradient(0, 0, 760, 0);
+    shade.addColorStop(0, 'rgba(4,8,20,0.85)');
+    shade.addColorStop(0.65, 'rgba(4,8,20,0.45)');
+    shade.addColorStop(1, 'rgba(4,8,20,0)');
+    g.fillStyle = shade;
+    g.fillRect(0, 0, 1200, 630);
+    const font = '-apple-system, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    g.fillStyle = '#ffffff';
+    g.font = `700 ${b.info.name.length > 9 ? 84 : 104}px ${font}`;
+    g.fillText(b.info.name, 72, 300);
+    g.fillStyle = '#f3c66b';
+    g.font = `600 42px ${font}`;
+    // the kind, wrapped to the text column
+    let line = '', y = 368;
+    for (const word of b.info.kind.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (g.measureText(next).width > 560 && line) { g.fillText(line, 72, y); line = word; y += 52; } else line = next;
+    }
+    g.fillText(line, 72, y);
+    g.fillStyle = 'rgba(220,228,245,0.85)';
+    g.font = `500 30px ${font}`;
+    g.fillText(UI.title, 72, 560);
+    const jpg = await new Promise<Blob>((r) => c.toBlob((x) => r(x!), 'image/jpeg', 0.88));
+    await fetch(`/__og/${id}`, { method: 'POST', body: jpg });
+    console.log('og card:', id);
+  }
+  flyTo(null, undefined, 'replace');
+}
+
 function frame(now: number) {
   const rawDt = Math.max(0, (now - lastNow) / 1000);
   lastNow = now;
@@ -534,6 +643,11 @@ function frame(now: number) {
   const halo = sunBody.anchor.userData.halo as THREE.Sprite;
   halo.material.opacity = THREE.MathUtils.smoothstep(camera.position.length(), 150, 450);
   updateLabels();
+  if (ogShot && focus && !flight) {
+    const done = ogShot;
+    ogShot = null;
+    done(takeOgShot());
+  }
   renderer.render(scene, camera);
   if (!loaded && texturesReady) {
     loaded = true;
