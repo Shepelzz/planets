@@ -1,6 +1,6 @@
-import { BODIES, INSIDE_STAT, NARRATION, UI, type BodyInfo } from './content';
+import { BODIES, INSIDE_STAT, NARRATION, STRUCTURE, UI, type BodyInfo } from './content';
 import { EARTH_DIAMETER, type BodyId } from './data';
-import { say, setSpeechEnabled, speechSupported } from './speech';
+import { preload, say, setSpeechEnabled, speechSupported } from './speech';
 
 interface Handlers {
   onSelect: (id: BodyId) => void;
@@ -210,6 +210,12 @@ export function createUI(h: Handlers) {
       return;
     }
     const b = current;
+    // everything this card can say, fetched ahead so a tap starts the voice at once
+    const n = NARRATION[b.id], st = STRUCTURE[b.id];
+    preload([
+      `${b.name}. ${b.kind}.`, ...Object.values(n.stats), ...(n.compare ? [n.compare] : []), ...b.facts,
+      ...(st ? [st.intro, ...st.layers.map((l) => l.text)] : []),
+    ]);
     info.hidden = !infoWanted;
     info.innerHTML = `
       <button class="close" aria-label="${UI.close}">${ICONS.close}</button>

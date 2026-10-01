@@ -1,7 +1,14 @@
-// Speaks phrases aloud. Every text the app says is pre-recorded with the Ukrainian voice Lesya
-// (scripts/build-voice.ts → public/voice), because devices without that voice — old iPads on
-// iOS 12 — would read Ukrainian with a Russian one. The browser's speech synthesis is only a
-// fallback for phrases that have no recording yet.
+// Speaks phrases aloud. Every text the app says is pre-recorded (public/voice, see README: Kira on
+// ElevenLabs), because devices without a Ukrainian voice — old iPads on iOS 12 — would read it with
+// a Russian one. The browser's speech synthesis is only a fallback for phrases with no recording.
+//
+// A recording fetched on the tap itself starts late on an iPad over Wi-Fi (Safari downloads and
+// buffers it first), so the phrases likely to be needed next — the open card's, the planets'
+// intros — are fetched ahead into memory (preload) and played from there.
+//
+// Between phrases the system may put the audio output to sleep; waking it (Bluetooth headphones
+// and speakers especially) swallows a second or two of the next phrase's start. While the child is
+// using the app, a silent Web Audio loop keeps the output awake (keepOutputAwake).
 
 import manifest from './voice-manifest.json';
 import { VOICE_PITCH, voiceKey } from './voiceKey';
@@ -32,6 +39,89 @@ if (synth) {
 
 export const speechSupported = recorded.size > 0 || !!synth;
 
+// ---------- recordings kept in memory ----------
+const fileUrl = (key: string) => `${import.meta.env.BASE_URL}voice/${key}.m4a`;
+/** key → object URL of the downloaded recording, oldest first */
+const ready = new Map<string, string>();
+const queue: string[] = [];
+let fetching = 0;
+const KEEP = 120; // ~8 MB of AAC at most
+const PARALLEL = 2;
+
+function pump() {
+  while (fetching < PARALLEL && queue.length) {
+    const key = queue.shift()!;
+    if (ready.has(key)) continue;
+    fetching++;
+    fetch(fileUrl(key))
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (!blob || ready.has(key)) return;
+        ready.set(key, URL.createObjectURL(blob));
+        // forget the oldest, except what is playing right now
+        for (const [k, url] of ready) {
+          if (ready.size <= KEEP) break;
+          if (audio && audio.src === url) continue;
+          URL.revokeObjectURL(url);
+          ready.delete(k);
+        }
+      })
+      .catch(() => {})
+      .then(() => {
+        fetching--;
+        pump();
+      });
+  }
+}
+
+/**
+ * Fetch these phrases' recordings ahead of time, so tapping them starts the voice at once. Later
+ * calls go first (the open card matters more than the background intros).
+ */
+export function preload(texts: string[]) {
+  const keys = texts.map(voiceKey).filter((k) => recorded.has(k) && !ready.has(k) && !queue.includes(k));
+  queue.unshift(...keys);
+  pump();
+}
+
+// ---------- keeping the audio output awake ----------
+type AudioCtx = AudioContext;
+let ctx: AudioCtx | null = null;
+let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+const AWAKE_AFTER_LAST_PHRASE = 90_000; // ms
+
+/** Call from a tap (browsers start audio only on a user gesture). */
+function keepOutputAwake() {
+  try {
+    if (!ctx) {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      ctx = new Ctx();
+      // one second of silence, looped: a running source keeps the output device open
+      const silence = ctx.createBufferSource();
+      silence.buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      silence.loop = true;
+      silence.connect(ctx.destination);
+      silence.start(0);
+    }
+    if (ctx.state === 'suspended') void ctx.resume();
+    clearTimeout(sleepTimer);
+    sleepTimer = setTimeout(letOutputSleep, AWAKE_AFTER_LAST_PHRASE);
+  } catch {
+    // no Web Audio: phrases just start a little later
+  }
+}
+
+function letOutputSleep() {
+  clearTimeout(sleepTimer);
+  if (ctx && ctx.state === 'running') void ctx.suspend();
+}
+
+if (typeof document !== 'undefined')
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') letOutputSleep();
+  });
+
 /** Stop whatever is playing and report why. */
 function stop(how: SpeechEnd) {
   if (audio) audio.pause();
@@ -43,7 +133,10 @@ function stop(how: SpeechEnd) {
 
 export function setSpeechEnabled(on: boolean) {
   enabled = on;
-  if (!on) stop('muted');
+  if (!on) {
+    stop('muted');
+    letOutputSleep();
+  }
 }
 
 /**
@@ -53,6 +146,7 @@ export function setSpeechEnabled(on: boolean) {
 export function say(text: string, onDone?: (how: SpeechEnd) => void): boolean {
   if (!enabled) return false;
   stop('replaced');
+  keepOutputAwake();
 
   let done = false;
   const finish = (how: SpeechEnd = 'ended') => {
@@ -71,7 +165,13 @@ export function say(text: string, onDone?: (how: SpeechEnd) => void): boolean {
       // recording missing or not playable: read it with the built-in voice instead
       if (!done) speakWithSynth(text, finish);
     };
-    audio.src = `${import.meta.env.BASE_URL}voice/${key}.m4a`;
+    const url = ready.get(key);
+    if (url) {
+      // used again: move to the end, so it stays in memory longest
+      ready.delete(key);
+      ready.set(key, url);
+    }
+    audio.src = url ?? fileUrl(key);
     const p = audio.play();
     if (p)
       p.catch((err: DOMException) => {

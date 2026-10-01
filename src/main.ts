@@ -10,7 +10,7 @@ import { Cutaway } from './cutaway';
 import { loadingManager, useLiteTextures } from './textures';
 import { renderThumbnails } from './thumbnails';
 import { NARRATION, UI } from './content';
-import { say } from './speech';
+import { preload, say } from './speech';
 import './style.css';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -46,6 +46,8 @@ loadingManager.onLoad = () => {
   texturesReady = true;
   // real planet pictures for the dock, info card and size comparison
   ui.setThumbnails(renderThumbnails(bodies.map((b) => b.info.id)));
+  // each body's intro plays the moment it is chosen: fetch them ahead, in the background
+  preload(bodies.map((b) => NARRATION[b.info.id].intro));
 };
 loadingManager.onError = (url) => console.warn('texture failed to load', url);
 
