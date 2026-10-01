@@ -4,7 +4,8 @@
 
 export type SurfaceKind =
   | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
-  | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon';
+  | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon'
+  | 'io' | 'europa' | 'ganymede' | 'callisto' | 'titan' | 'enceladus' | 'triton' | 'phobos' | 'deimos';
 
 const TEXTURED = /* glsl */ `
 uniform sampler2D uMap;
@@ -70,6 +71,56 @@ vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
   return c;
 }`;
 
+// Moons (NASA 3D Resources maps, public domain). Several maps are greyscale or have gaps where no
+// spacecraft looked; each moon below gets its real colours and its gaps filled.
+const moonSurface = (colour: string) => /* glsl */ `
+uniform sampler2D uMap;
+vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
+  spec = 0.0; night = vec3(0.0);
+  vec3 raw = texture2D(uMap, uv).rgb;
+  float g = dot(raw, vec3(0.299, 0.587, 0.114));
+  vec3 c;
+  ${colour}
+  h = g;
+  return c;
+}`;
+
+// Io: the map is in colour but black along the poles: take the nearest imaged row instead
+const IO = moonSurface(/* glsl */ `
+  if (g < 0.06) raw = texture2D(uMap, vec2(uv.x, clamp(uv.y, 0.07, 0.93))).rgb;
+  c = srgbToLinear(raw);`);
+// Europa: white-beige ice crossed by red-brown cracks
+const EUROPA = moonSurface(/* glsl */ `
+  c = srgbToLinear(mix(vec3(0.52, 0.32, 0.2), vec3(0.95, 0.91, 0.84), smoothstep(0.25, 0.95, g)));`);
+// Ganymede: dark old and bright grooved terrain, slightly brownish
+const GANYMEDE = moonSurface(/* glsl */ `
+  c = srgbToLinear(raw * vec3(0.98, 0.93, 0.86));`);
+// Callisto: dark and full of craters; the big white patch is a gap in the pictures, filled with
+// made-up cratered ground of the same tone
+const CALLISTO = moonSurface(/* glsl */ `
+  float gap = smoothstep(0.78, 0.9, g);
+  float made = 0.36 + 0.16 * fbm(p * 9.0, 4) + 0.35 * smoothstep(0.55, 0.8, fbm(p * 26.0 + 3.0, 2));
+  g = mix(g, made, gap);
+  c = srgbToLinear(vec3(g) * vec3(0.9, 0.82, 0.72));`);
+// Titan: the surface glimpsed through a thick orange haze
+const TITAN = moonSurface(/* glsl */ `
+  c = srgbToLinear(mix(raw, vec3(0.86, 0.6, 0.26), 0.35));`);
+// Enceladus: the whitest thing in the Solar System, a touch of blue in the cracks
+const ENCELADUS = moonSurface(/* glsl */ `
+  c = srgbToLinear(raw * vec3(0.97, 0.99, 1.03));`);
+// Triton: Voyager 2 saw only part of it; the rest is filled with its «cantaloupe» terrain and the
+// pinkish south polar cap
+const TRITON = moonSurface(/* glsl */ `
+  float seen = smoothstep(0.03, 0.1, max(raw.r, max(raw.g, raw.b)));
+  float n = fbm(p * 7.0, 4);
+  vec3 made = mix(vec3(0.6, 0.55, 0.5), vec3(0.8, 0.74, 0.68), n * 0.5 + 0.5);
+  made = mix(made, vec3(0.86, 0.72, 0.68), 1.0 - smoothstep(-0.55, -0.2, p.y));
+  c = srgbToLinear(mix(made, raw, seen));
+  g = dot(c, vec3(0.3));`);
+// Phobos and Deimos: dusty grey-brown rock
+const MARS_MOON = moonSurface(/* glsl */ `
+  c = srgbToLinear(raw * vec3(0.9, 0.8, 0.7));`);
+
 export const SURFACES: Record<SurfaceKind, string> = {
   mercury: TEXTURED,
   venus: TEXTURED,
@@ -82,6 +133,15 @@ export const SURFACES: Record<SurfaceKind, string> = {
   neptune: TEXTURED,
   pluto: PLUTO,
   charon: CHARON,
+  io: IO,
+  europa: EUROPA,
+  ganymede: GANYMEDE,
+  callisto: CALLISTO,
+  titan: TITAN,
+  enceladus: ENCELADUS,
+  triton: TRITON,
+  phobos: MARS_MOON,
+  deimos: MARS_MOON,
 };
 
 /** Texture files in public/textures (Solar System Scope, CC BY 4.0, based on NASA data). */
@@ -98,6 +158,16 @@ export const TEXTURE_FILES: Record<SurfaceKind | 'sun', string> = {
   neptune: 'neptune.jpg',
   pluto: 'pluto.jpg', // NASA / New Horizons global mosaic, public domain
   charon: 'charon.jpg', // NASA / New Horizons / USGS global mosaic, public domain
+  // moons: NASA 3D Resources, public domain
+  io: 'io.jpg',
+  europa: 'europa.jpg',
+  ganymede: 'ganymede.jpg',
+  callisto: 'callisto.jpg',
+  titan: 'titan.jpg',
+  enceladus: 'enceladus.jpg',
+  triton: 'triton.jpg',
+  phobos: 'phobos.jpg',
+  deimos: 'deimos.jpg',
 };
 
 /** Bump strength (fraction of radius per unit of map brightness). */
@@ -108,4 +178,10 @@ export const BUMP: Partial<Record<SurfaceKind, number>> = {
   earth: 0.006,
   pluto: 0.012,
   charon: 0.015,
+  io: 0.006,
+  ganymede: 0.008,
+  callisto: 0.015,
+  enceladus: 0.008,
+  phobos: 0.03,
+  deimos: 0.025,
 };

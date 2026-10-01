@@ -2,7 +2,20 @@ import type { SurfaceKind } from './surfaces.ts';
 
 export type BodyId =
   | 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
-  | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon' | 'iss';
+  | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon' | 'iss'
+  | 'phobos' | 'deimos' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'enceladus' | 'titan' | 'triton'
+  | 'jupiter_rocks' | 'saturn_rocks' | 'uranus_rocks' | 'neptune_rocks';
+
+/** Many small moons shown as one body: a few rocks circling in a band around the planet. */
+export interface Swarm {
+  /** rocks drawn */
+  count: number;
+  /** band, distance from the planet's centre */
+  inner: number;
+  outer: number;
+  /** rock colour (sRGB hex) */
+  colour: string;
+}
 
 export interface Atmosphere {
   color: [number, number, number];
@@ -37,6 +50,17 @@ export interface BodyPhysics {
   parent?: BodyId;
   /** a spacecraft, not a ball: drawn from its own model, no cut-away or size comparison */
   station?: boolean;
+  /** not a ball but a lumpy potato: relative size along x, y, z (the largest is 1) */
+  shape?: [number, number, number];
+  /** many small moons as one body (no size comparison, no cut-away; picked from the moons row only) */
+  swarm?: Swarm;
+  /** a moon or swarm circling in its planet's equatorial plane (tilted with the planet) */
+  equatorial?: boolean;
+  /**
+   * A big planet's moons are shown only while we visit it: from afar they would be specks, and the
+   * giants' moon systems are wider than the gaps between the (squeezed) orbits.
+   */
+  moonsWhenNear?: boolean;
 }
 
 // Earth's year ≈ 150 s on screen; other orbits follow the real period ratios.
@@ -45,6 +69,8 @@ const YEAR = 150;
 // Show sizes, not real ones: real proportions leave tiny dots around a huge Sun. The power < 1
 // squeezes the range while keeping the order (Jupiter > Saturn > … > Mercury); Earth ≈ 9.9.
 const size = (earthDiameters: number) => 9.9 * Math.pow(earthDiameters, 0.45);
+/** Moons at half the show scale, like the Moon. */
+const moonSize = (km: number) => size(km / 12742) / 2;
 
 export const PHYSICS: BodyPhysics[] = [
   {
@@ -136,6 +162,37 @@ export const PHYSICS: BodyPhysics[] = [
     startAngle: 5.2,
     surface: 'mars',
     atmosphere: { color: [0.95, 0.6, 0.4], scale: 1.035, intensity: 0.5 },
+    moonsWhenNear: true,
+  },
+  {
+    id: 'phobos',
+    icon: 'radial-gradient(circle at 35% 35%, #b9ab9c 0%, #6f6358 55%, #2f2925 100%)',
+    diameterKm: 22.5,
+    radius: 0.75, // far bigger than true scale (it is a 27 km rock), or it would be invisible
+    shape: [1, 0.8, 0.68],
+    orbit: 11,
+    orbitSeconds: 7, // really three laps a day: faster than Mars turns
+    spinSeconds: 7,
+    tilt: 0,
+    startAngle: 0.4,
+    surface: 'phobos',
+    parent: 'mars',
+    equatorial: true,
+  },
+  {
+    id: 'deimos',
+    icon: 'radial-gradient(circle at 35% 35%, #c9bcae 0%, #7d7166 55%, #35302b 100%)',
+    diameterKm: 12.4,
+    radius: 0.55,
+    shape: [1, 0.78, 0.66],
+    orbit: 14.5,
+    orbitSeconds: 16,
+    spinSeconds: 16,
+    tilt: 0,
+    startAngle: 3.4,
+    surface: 'deimos',
+    parent: 'mars',
+    equatorial: true,
   },
   {
     id: 'jupiter',
@@ -149,6 +206,77 @@ export const PHYSICS: BodyPhysics[] = [
     startAngle: 1.9,
     surface: 'jupiter',
     atmosphere: { color: [0.85, 0.75, 0.6], scale: 1.025, intensity: 0.5 },
+    moonsWhenNear: true,
+  },
+  {
+    id: 'io',
+    icon: 'radial-gradient(circle at 35% 35%, #fff2a8 0%, #d9b54a 50%, #6e4f17 100%)',
+    diameterKm: 3643,
+    radius: moonSize(3643),
+    orbit: 36,
+    orbitSeconds: 14,
+    spinSeconds: 14, // tidally locked
+    tilt: 0,
+    startAngle: 0.3,
+    surface: 'io',
+    parent: 'jupiter',
+    equatorial: true,
+  },
+  {
+    id: 'europa',
+    icon: 'radial-gradient(circle at 35% 35%, #fbf6ee 0%, #cbb9a2 55%, #6e5b48 100%)',
+    diameterKm: 3122,
+    radius: moonSize(3122),
+    orbit: 42,
+    orbitSeconds: 20,
+    spinSeconds: 20, // tidally locked
+    tilt: 0,
+    startAngle: 2.0,
+    surface: 'europa',
+    parent: 'jupiter',
+    equatorial: true,
+  },
+  {
+    id: 'ganymede',
+    icon: 'radial-gradient(circle at 35% 35%, #ddd5ca 0%, #8f857a 55%, #3c3631 100%)',
+    diameterKm: 5268,
+    radius: moonSize(5268),
+    orbit: 49,
+    orbitSeconds: 28,
+    spinSeconds: 28, // tidally locked
+    tilt: 0,
+    startAngle: 3.9,
+    surface: 'ganymede',
+    parent: 'jupiter',
+    equatorial: true,
+  },
+  {
+    id: 'callisto',
+    icon: 'radial-gradient(circle at 35% 35%, #b5a593 0%, #6b5e51 55%, #2b251f 100%)',
+    diameterKm: 4821,
+    radius: moonSize(4821),
+    orbit: 57,
+    orbitSeconds: 40,
+    spinSeconds: 40, // tidally locked
+    tilt: 0,
+    startAngle: 5.3,
+    surface: 'callisto',
+    parent: 'jupiter',
+    equatorial: true,
+  },
+  {
+    id: 'jupiter_rocks',
+    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
+    diameterKm: 10, // a typical small moon
+    radius: size(10.97), // the planet's: the camera keeps outside it
+    orbit: 0, // the band is centred on the planet
+    orbitSeconds: 0,
+    spinSeconds: 0,
+    tilt: 0,
+    startAngle: 0,
+    parent: 'jupiter',
+    equatorial: true,
+    swarm: { count: 18, inner: 62, outer: 68, colour: '#8f8276' },
   },
   {
     id: 'saturn',
@@ -163,6 +291,50 @@ export const PHYSICS: BodyPhysics[] = [
     surface: 'saturn',
     atmosphere: { color: [0.9, 0.8, 0.6], scale: 1.025, intensity: 0.45 },
     rings: true,
+    moonsWhenNear: true,
+  },
+  {
+    id: 'enceladus',
+    icon: 'radial-gradient(circle at 35% 35%, #ffffff 0%, #dfe8f0 55%, #7d8a96 100%)',
+    diameterKm: 504,
+    radius: moonSize(504),
+    orbit: 66,
+    orbitSeconds: 12,
+    spinSeconds: 12, // tidally locked
+    tilt: 0,
+    startAngle: 1.2,
+    surface: 'enceladus',
+    parent: 'saturn',
+    equatorial: true,
+  },
+  {
+    id: 'titan',
+    icon: 'radial-gradient(circle at 35% 35%, #ffd38a 0%, #e09a3c 55%, #7a4a16 100%)',
+    diameterKm: 5150,
+    radius: moonSize(5150),
+    orbit: 73,
+    orbitSeconds: 34,
+    spinSeconds: 34, // tidally locked
+    tilt: 0,
+    startAngle: 4.4,
+    surface: 'titan',
+    parent: 'saturn',
+    equatorial: true,
+    atmosphere: { color: [1.0, 0.62, 0.22], scale: 1.09, intensity: 1.1 }, // thick orange haze
+  },
+  {
+    id: 'saturn_rocks',
+    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
+    diameterKm: 10, // a typical small moon
+    radius: size(9.14), // the planet's: the camera keeps outside it
+    orbit: 0, // the band is centred on the planet
+    orbitSeconds: 0,
+    spinSeconds: 0,
+    tilt: 0,
+    startAngle: 0,
+    parent: 'saturn',
+    equatorial: true,
+    swarm: { count: 20, inner: 79, outer: 87, colour: '#a39787' },
   },
   {
     id: 'uranus',
@@ -176,6 +348,21 @@ export const PHYSICS: BodyPhysics[] = [
     startAngle: 0.2,
     surface: 'uranus',
     atmosphere: { color: [0.6, 0.9, 1.0], scale: 1.04, intensity: 0.9 },
+    moonsWhenNear: true,
+  },
+  {
+    id: 'uranus_rocks',
+    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
+    diameterKm: 10, // a typical small moon
+    radius: size(3.98), // the planet's: the camera keeps outside it
+    orbit: 0, // the band is centred on the planet
+    orbitSeconds: 0,
+    spinSeconds: 0,
+    tilt: 0,
+    startAngle: 0,
+    parent: 'uranus',
+    equatorial: true,
+    swarm: { count: 16, inner: 24, outer: 32, colour: '#8c8c94' },
   },
   {
     id: 'neptune',
@@ -189,6 +376,36 @@ export const PHYSICS: BodyPhysics[] = [
     startAngle: 4.6,
     surface: 'neptune',
     atmosphere: { color: [0.4, 0.62, 1.0], scale: 1.04, intensity: 1.0 },
+    moonsWhenNear: true,
+  },
+  {
+    id: 'triton',
+    icon: 'radial-gradient(circle at 35% 35%, #f3e3dc 0%, #b8a29a 55%, #4f4440 100%)',
+    diameterKm: 2707,
+    radius: moonSize(2707),
+    orbit: 28,
+    orbitSeconds: -24,
+    spinSeconds: 24, // tidally locked
+    tilt: 0,
+    startAngle: 2.2,
+    surface: 'triton',
+    parent: 'neptune',
+    equatorial: true,
+    // orbits backwards (negative period), the only big moon that does
+  },
+  {
+    id: 'neptune_rocks',
+    icon: 'radial-gradient(circle at 35% 35%, #c8beb2 0%, #7a7068 50%, #2e2a27 100%)',
+    diameterKm: 10, // a typical small moon
+    radius: size(3.86), // the planet's: the camera keeps outside it
+    orbit: 0, // the band is centred on the planet
+    orbitSeconds: 0,
+    spinSeconds: 0,
+    tilt: 0,
+    startAngle: 0,
+    parent: 'neptune',
+    equatorial: true,
+    swarm: { count: 14, inner: 33, outer: 40, colour: '#86868e' },
   },
   {
     id: 'pluto',

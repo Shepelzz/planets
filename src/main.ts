@@ -57,6 +57,71 @@ const lines = createOrbitLines(scene, bodies);
 const byId = new Map(bodies.map((b) => [b.info.id, b]));
 const sunBody = byId.get('sun')!;
 
+// ---------- moon systems shown only while visiting ----------
+// A giant's moons (and Mars's) appear when we fly to the planet or one of its moons. While there,
+// another planet or moon passing through the system is hidden: the squeezed orbits overlap.
+const systemReach = new Map<BodyId, number>();
+for (const b of bodies) {
+  const p = b.info.parent;
+  if (!p || !byId.get(p)!.info.moonsWhenNear) continue;
+  const reach = b.info.swarm ? b.info.swarm.outer + 1.5 : b.info.orbit + b.info.radius;
+  systemReach.set(p, Math.max(systemReach.get(p) ?? 0, reach));
+}
+// While visiting a planet with moons, the orbits make room for its moon system: the planet itself
+// moves out a little if the inner neighbours are too close, and every planet beyond it moves further
+// out, just enough to clear it. The camera rides along; back in the overview all return to place.
+const planets = bodies.filter((b) => !b.info.parent && b !== sunBody);
+/** How far a planet's always-shown things reach: rings, or moons like the Moon and Charon. */
+function extent(b: Body) {
+  let e = b.viewRadius;
+  if (!b.info.moonsWhenNear)
+    for (const m of bodies) if (m.info.parent === b.info.id) e = Math.max(e, m.info.orbit + m.viewRadius);
+  return e;
+}
+const extents = new Map(planets.map((b) => [b, extent(b)]));
+const ROOM = 4; // gap left between systems
+function updateSpread(dt: number) {
+  const visiting = focus ? byId.get(focus.info.parent ?? focus.info.id)! : null;
+  const reach = visiting ? systemReach.get(visiting.info.id) : undefined;
+  const target = new Map<Body, number>(planets.map((p) => [p, p.info.orbit]));
+  if (visiting && reach !== undefined) {
+    const r = visiting.info.orbit, band = Math.max(reach, visiting.viewRadius) + ROOM;
+    let inner = 0;
+    for (const p of planets) if (p.info.orbit < r) inner = Math.max(inner, p.info.orbit + extents.get(p)!);
+    const at = Math.max(r, inner + band);
+    target.set(visiting, at);
+    let limit = at + band;
+    for (const p of planets.filter((x) => x.info.orbit > r).sort((x, y) => x.info.orbit - y.info.orbit)) {
+      const e = extents.get(p)!;
+      const t = Math.max(p.info.orbit, limit + e);
+      target.set(p, t);
+      limit = t + e + ROOM;
+    }
+  }
+  const k = 1 - Math.exp(-dt * 2.5);
+  for (const p of planets) {
+    const t = target.get(p)!;
+    const now = p.orbitR ?? p.info.orbit;
+    p.orbitR = Math.abs(t - now) < 0.01 ? t : now + (t - now) * k;
+  }
+}
+
+function updateSystems() {
+  const visiting = focus ? focus.info.parent ?? focus.info.id : null;
+  const host = visiting ? byId.get(visiting)! : null;
+  const reach = visiting ? systemReach.get(visiting) : undefined;
+  for (const b of bodies) {
+    const p = b.info.parent;
+    const mine = (p ?? b.info.id) === visiting;
+    let show = !p || !byId.get(p)!.info.moonsWhenNear || p === visiting;
+    if (show && reach !== undefined && host && !mine && b !== sunBody)
+      show = b.anchor.position.distanceTo(host.anchor.position) > reach + b.viewRadius;
+    b.anchor.visible = show;
+    const line = lines.get(b.info.id);
+    if (line) line.visible = show;
+  }
+}
+
 // textbook cut-away of the focused body ("З чого складається" block)
 const cutLabels = document.createElement('div');
 cutLabels.id = 'cut-labels';
@@ -159,6 +224,8 @@ function focusOffset(b: Body) {
   const dir = toSun.multiplyScalar(0.62).addScaledVector(side, 0.78).addScaledVector(up, 0.2).normalize();
   if (b.info.id === 'sun') dir.set(0.3, 0.25, 1).normalize();
   if (b.info.rings) dir.addScaledVector(up, 0.25).normalize();
+  // a swarm: close enough that the rocks read as rocks, with the planet in the middle of the band
+  if (b.swarm) return dir.addScaledVector(up, 0.3).normalize().multiplyScalar(fitDistance(b.viewRadius * 0.62));
   return dir.multiplyScalar(fitDistance(b.viewRadius));
 }
 
@@ -280,6 +347,7 @@ function pick(px: number, py: number): Body | null {
   let best: Body | null = null;
   let bestDist = Infinity;
   for (const b of bodies) {
+    if (!b.anchor.visible || b.swarm) continue; // a swarm is chosen from the moons row
     const s = screenInfo(b);
     if (s.behind) continue;
     const reach = Math.max(s.pxRadius, 26);
@@ -387,7 +455,7 @@ function occluded(b: Body) {
   const dist = toBody.length();
   toBody.divideScalar(dist);
   for (const o of bodies) {
-    if (o === b || o.info.radius <= b.info.radius) continue;
+    if (o === b || o.swarm || !o.anchor.visible || o.info.radius <= b.info.radius) continue;
     toOther.subVectors(o.anchor.position, camera.position);
     const along = toOther.dot(toBody);
     if (along <= 0 || along >= dist) continue;
@@ -400,7 +468,7 @@ function updateLabels() {
   for (const b of bodies) {
     const el = labels.get(b.info.id)!;
     const s = screenInfo(b);
-    let show = !s.behind && s.pxRadius < 90 && b !== focus && !flight && !occluded(b);
+    let show = b.anchor.visible && !b.swarm && !s.behind && s.pxRadius < 90 && b !== focus && !flight && !occluded(b);
     // a moon or station drawn right next to its planet: the planet's label is enough
     if (b.info.parent && byId.get(b.info.parent) !== focus) {
       const p = screenInfo(byId.get(b.info.parent)!);
@@ -450,7 +518,9 @@ function frame(now: number) {
   adaptResolution(now);
   const dt = Math.min(rawDt, 0.1);
   if (playing) simTime += dt;
+  updateSpread(rawDt > 0.5 ? 0.5 : rawDt);
   updateBodies(bodies, playing ? dt : 0, simTime, lines, camera.position);
+  updateSystems();
   updateFlight(Math.min(rawDt, 0.5)); // flights run on wall-clock time even when frames stutter
   cutaway.update(Math.min(rawDt, 0.1));
   followFocus();

@@ -75,4 +75,42 @@ export const LAYERS: Partial<Record<BodyId, LayerPhysics[]>> = {
     { id: 'crust', to: 1, color: '#d6dbe0' },
     { id: 'core', to: 0.7, color: '#b9784c' },
   ],
+  io: [
+    { id: 'crust', to: 1, color: '#d9b54a' },
+    { id: 'mantle', to: 0.9, color: '#e0662b' },
+    { id: 'core', to: 0.52, color: '#f0c060' },
+  ],
+  europa: [
+    { id: 'crust', to: 1, color: '#eef3f7' }, // ice shell (really thinner: ~20 km of 1560)
+    { id: 'ocean', to: 0.92, color: '#3f7fd0' },
+    { id: 'mantle', to: 0.84, color: '#a8724a' },
+    { id: 'core', to: 0.42, color: '#f0c060' },
+  ],
+  ganymede: [
+    { id: 'crust', to: 1, color: '#dfe6ec' },
+    { id: 'ocean', to: 0.9, color: '#3f7fd0' },
+    { id: 'mantle', to: 0.8, color: '#8d7a68' },
+    { id: 'core', to: 0.3, color: '#f0c060' },
+  ],
+  callisto: [
+    { id: 'crust', to: 1, color: '#7d6e60' },
+    { id: 'ocean', to: 0.93, color: '#3f7fd0' },
+    { id: 'mantle', to: 0.86, color: '#9a8f86' },
+  ],
+  titan: [
+    { id: 'crust', to: 1, color: '#d9a45a' },
+    { id: 'ocean', to: 0.9, color: '#3f7fd0' },
+    { id: 'mantle', to: 0.8, color: '#c9dfea' },
+    { id: 'core', to: 0.6, color: '#9a7a5a' },
+  ],
+  enceladus: [
+    { id: 'crust', to: 1, color: '#f4f8fb' },
+    { id: 'ocean', to: 0.9, color: '#3f7fd0' },
+    { id: 'core', to: 0.75, color: '#8a7a6a' },
+  ],
+  triton: [
+    { id: 'crust', to: 1, color: '#e9d8d0' },
+    { id: 'mantle', to: 0.85, color: '#bcd3e0' },
+    { id: 'core', to: 0.65, color: '#9a7a5a' },
+  ],
 };

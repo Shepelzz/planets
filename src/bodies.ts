@@ -4,6 +4,7 @@ import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
 import { loadTexture, SRGB_GLSL } from './textures';
 import { makeStation, trackSun, type Station } from './station';
+import { makeSwarm, updateSwarm, type SwarmView } from './swarm';
 import { loadStationModel, turnWings, type RealStation } from './stationModel';
 
 const DEG = Math.PI / 180;
@@ -39,9 +40,16 @@ export interface Body {
   clouds?: THREE.Mesh;
   /** a spacecraft: flies nose first, turns its wings to the Sun, hides in Earth's shadow */
   station?: Station & { occluder: THREE.Vector4; real?: RealStation; loading?: boolean };
+  /** many small moons as one body: rocks circling the planet */
+  swarm?: SwarmView;
   /** Radius that must fit on screen when we fly to this body (rings included). */
   viewRadius: number;
   orbitAngle: number;
+  /**
+   * Current orbit radius when it differs from info.orbit: while we visit a planet, the neighbours'
+   * orbits move aside so its moons never run into them (main.ts), and come back for the overview.
+   */
+  orbitR?: number;
   spinAngle: number;
   materials: THREE.ShaderMaterial[];
   /** shared by the surface, cloud and Sun shaders */
@@ -388,7 +396,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     extensions: { derivatives: true }, // dFdx/dFdy for bump mapping on WebGL 1
   });
   materials.push(mat);
-  const mesh = new THREE.Mesh(sphereGeo, mat);
+  const mesh = new THREE.Mesh(info.shape ? lumpyGeometry(info.shape, info.id) : sphereGeo, mat);
   mesh.scale.setScalar(info.radius);
   tilt.add(mesh);
 
@@ -470,6 +478,46 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
   return { info, anchor, tilt, mesh, clouds, viewRadius, orbitAngle: info.startAngle, spinAngle: 0, materials, cut, atmosphere };
 }
 
+/** Phobos, Deimos: a squashed ball with a few broad bumps and dents (largest axis = 1). */
+function lumpyGeometry(shape: [number, number, number], id: string) {
+  const g = (lowDetail ? new THREE.SphereGeometry(1, 48, 32) : new THREE.SphereGeometry(1, 96, 64));
+  let seed = 0;
+  for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const bumps = Array.from({ length: 9 }, () => ({
+    dir: new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize(),
+    amount: (rand() - 0.5) * 0.22,
+  }));
+  const pos = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    let r = 1;
+    for (const b of bumps) r += b.amount * Math.max(v.dot(b.dir), 0) ** 3;
+    v.multiplyScalar(r).set(v.x * shape[0], v.y * shape[1], v.z * shape[2]);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Many small moons around a planet: a band of rocks in the planet's equatorial plane. */
+function makeSwarmBody(info: BodyInfo, scene: THREE.Scene): Body {
+  const anchor = new THREE.Group();
+  const tilt = new THREE.Group();
+  tilt.rotation.z = (BODIES.find((p) => p.id === info.parent)!.tilt * DEG);
+  anchor.add(tilt);
+  let seed = 0;
+  for (const ch of info.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const swarm = makeSwarm(info.swarm!, seed, new THREE.Vector3());
+  tilt.add(swarm.group);
+  scene.add(anchor);
+  return {
+    info, anchor, tilt, mesh: swarm.group, viewRadius: info.swarm!.outer, orbitAngle: 0, spinAngle: 0,
+    materials: [swarm.material], cut: makeCutUniforms(), swarm,
+  };
+}
+
 function makeStationBody(info: BodyInfo, scene: THREE.Scene): Body {
   const anchor = new THREE.Group();
   const tilt = new THREE.Group(); // carries the flight attitude, set every frame
@@ -488,19 +536,27 @@ export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
   lowDetail = lowEnd;
   sphereGeo = lowEnd ? new THREE.SphereGeometry(1, 72, 48) : new THREE.SphereGeometry(1, 160, 120);
   return BODIES.map((info) =>
-    info.id === 'sun' ? makeSun(info, scene) : info.station ? makeStationBody(info, scene) : makePlanet(info, scene));
+    info.id === 'sun' ? makeSun(info, scene)
+      : info.station ? makeStationBody(info, scene)
+      : info.swarm ? makeSwarmBody(info, scene)
+      : makePlanet(info, scene));
 }
 
 /**
  * Position on a circular orbit relative to its centre. Planets move in the x–z plane; an inclined
  * orbit (Pluto, 17°) is tipped about the x axis; moons wobble a little above and below their planet.
  */
-function orbitOffset(info: BodyInfo, angle: number, out: THREE.Vector3) {
-  const d = info.orbit;
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+const TILT = new Map(BODIES.map((b) => [b.id as string, b.tilt]));
+
+function orbitOffset(info: BodyInfo, angle: number, out: THREE.Vector3, d = info.orbit) {
   const along = Math.sin(angle) * d;
   const inc = (info.inclination ?? 0) * DEG;
-  const wobble = info.parent && !info.inclination ? Math.sin(angle) * 0.09 * d : 0;
-  return out.set(Math.cos(angle) * d, along * Math.sin(inc) + wobble, -along * Math.cos(inc));
+  const wobble = info.parent && !info.inclination && !info.equatorial ? Math.sin(angle) * 0.09 * d : 0;
+  out.set(Math.cos(angle) * d, along * Math.sin(inc) + wobble, -along * Math.cos(inc));
+  // moons of tilted planets circle in the planet's equatorial plane (Saturn's in its ring plane)
+  if (info.equatorial && info.parent) out.applyAxisAngle(Z_AXIS, (TILT.get(info.parent) ?? 0) * DEG);
+  return out;
 }
 
 export function createOrbitLines(scene: THREE.Scene, bodies: Body[]): Map<string, THREE.LineLoop> {
@@ -511,7 +567,8 @@ export function createOrbitLines(scene: THREE.Scene, bodies: Body[]): Map<string
     const n = 512;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
-      pts.push(orbitOffset({ ...b.info, parent: undefined }, a, new THREE.Vector3()));
+      // a tilted moon orbit keeps its tilt; the Moon's wobble is left out of the line
+      pts.push(orbitOffset(b.info.equatorial ? b.info : { ...b.info, parent: undefined }, a, new THREE.Vector3()));
     }
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({ color: 0x8fb4ff, transparent: true, opacity: 0.16, depthWrite: false });
@@ -581,13 +638,15 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const i = b.info;
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
-    b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position)).add(origin);
-    if (b.station) flyNoseFirst(b, parent!, viewer);
+    b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position, b.orbitR ?? i.orbit)).add(origin);
+    if (b.swarm) updateSwarm(b.swarm, dt);
+    else if (b.station) flyNoseFirst(b, parent!, viewer);
     // moons (the Moon, Charon) keep one face towards their planet
     else b.mesh.rotation.y = parent ? b.orbitAngle + Math.PI : b.spinAngle;
     if (b.clouds) b.clouds.rotation.y = b.spinAngle * 1.08;
     for (const m of b.materials) if (m.uniforms.uTime) m.uniforms.uTime.value = time;
     if (parent) lines.get(i.id)?.position.copy(parent.anchor.position);
+    else if (i.orbit) lines.get(i.id)?.scale.setScalar((b.orbitR ?? i.orbit) / i.orbit);
   }
   for (const b of bodies) {
     b.tilt.updateMatrixWorld(true);
