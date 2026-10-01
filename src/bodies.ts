@@ -3,6 +3,7 @@ import { BODIES, type BodyInfo } from './content';
 import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
 import { loadTexture, SRGB_GLSL } from './textures';
+import { makeStation, trackSun, type Station } from './station';
 
 const DEG = Math.PI / 180;
 
@@ -32,8 +33,11 @@ export interface Body {
   anchor: THREE.Group;
   /** Carries the axial tilt; the spinning mesh and rings live inside it. */
   tilt: THREE.Group;
-  mesh: THREE.Mesh;
+  /** the spinning ball, or a station's model */
+  mesh: THREE.Object3D;
   clouds?: THREE.Mesh;
+  /** a spacecraft: flies nose first, turns its wings to the Sun, hides in Earth's shadow */
+  station?: Station & { occluder: THREE.Vector4 };
   /** Radius that must fit on screen when we fly to this body (rings included). */
   viewRadius: number;
   orbitAngle: number;
@@ -465,10 +469,25 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
   return { info, anchor, tilt, mesh, clouds, viewRadius, orbitAngle: info.startAngle, spinAngle: 0, materials, cut, atmosphere };
 }
 
+function makeStationBody(info: BodyInfo, scene: THREE.Scene): Body {
+  const anchor = new THREE.Group();
+  const tilt = new THREE.Group(); // carries the flight attitude, set every frame
+  anchor.add(tilt);
+  const occluder = new THREE.Vector4();
+  const station = makeStation(info.radius, new THREE.Vector3(), occluder);
+  tilt.add(station.model);
+  scene.add(anchor);
+  return {
+    info, anchor, tilt, mesh: station.model, viewRadius: info.radius, orbitAngle: info.startAngle, spinAngle: 0,
+    materials: station.materials, cut: makeCutUniforms(), station: { ...station, occluder },
+  };
+}
+
 export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
   lowDetail = lowEnd;
   sphereGeo = lowEnd ? new THREE.SphereGeometry(1, 72, 48) : new THREE.SphereGeometry(1, 160, 120);
-  return BODIES.map((info) => (info.id === 'sun' ? makeSun(info, scene) : makePlanet(info, scene)));
+  return BODIES.map((info) =>
+    info.id === 'sun' ? makeSun(info, scene) : info.station ? makeStationBody(info, scene) : makePlanet(info, scene));
 }
 
 /**
@@ -479,7 +498,7 @@ function orbitOffset(info: BodyInfo, angle: number, out: THREE.Vector3) {
   const d = info.orbit;
   const along = Math.sin(angle) * d;
   const inc = (info.inclination ?? 0) * DEG;
-  const wobble = info.parent ? Math.sin(angle) * 0.09 * d : 0;
+  const wobble = info.parent && !info.inclination ? Math.sin(angle) * 0.09 * d : 0;
   return out.set(Math.cos(angle) * d, along * Math.sin(inc) + wobble, -along * Math.cos(inc));
 }
 
@@ -504,6 +523,23 @@ export function createOrbitLines(scene: THREE.Scene, bodies: Body[]): Map<string
 
 const tmp = new THREE.Vector3();
 
+const fwd = new THREE.Vector3();
+const upV = new THREE.Vector3();
+const sideV = new THREE.Vector3();
+const basis = new THREE.Matrix4();
+
+/** Station attitude: nose along the orbit, truss across it, top away from the planet; wings to the Sun. */
+function flyNoseFirst(b: Body, parent: Body) {
+  const s = b.station!;
+  orbitOffset(b.info, b.orbitAngle + 0.01, fwd).add(parent.anchor.position).sub(b.anchor.position).normalize();
+  upV.subVectors(b.anchor.position, parent.anchor.position).normalize();
+  sideV.crossVectors(upV, fwd).normalize();
+  fwd.crossVectors(sideV, upV);
+  b.tilt.quaternion.setFromRotationMatrix(basis.makeBasis(fwd, sideV, upV));
+  trackSun(s, b.tilt.quaternion, tmp.copy(b.anchor.position).negate().normalize());
+  s.occluder.set(parent.anchor.position.x, parent.anchor.position.y, parent.anchor.position.z, parent.info.radius);
+}
+
 const cloudQuat = new THREE.Quaternion();
 const cloudRot = new THREE.Matrix4();
 
@@ -521,8 +557,9 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
     b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position)).add(origin);
+    if (b.station) flyNoseFirst(b, parent!);
     // moons (the Moon, Charon) keep one face towards their planet
-    b.mesh.rotation.y = parent ? b.orbitAngle + Math.PI : b.spinAngle;
+    else b.mesh.rotation.y = parent ? b.orbitAngle + Math.PI : b.spinAngle;
     if (b.clouds) b.clouds.rotation.y = b.spinAngle * 1.08;
     for (const m of b.materials) if (m.uniforms.uTime) m.uniforms.uTime.value = time;
     if (parent) lines.get(i.id)?.position.copy(parent.anchor.position);

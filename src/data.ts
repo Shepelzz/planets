@@ -2,7 +2,7 @@ import type { SurfaceKind } from './surfaces.ts';
 
 export type BodyId =
   | 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
-  | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon';
+  | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon' | 'iss';
 
 export interface Atmosphere {
   color: [number, number, number];
@@ -35,6 +35,8 @@ export interface BodyPhysics {
   clouds?: boolean;
   rings?: boolean;
   parent?: BodyId;
+  /** a spacecraft, not a ball: drawn from its own model, no cut-away or size comparison */
+  station?: boolean;
 }
 
 // Earth's year ≈ 150 s on screen; other orbits follow the real period ratios.
@@ -107,6 +109,20 @@ export const PHYSICS: BodyPhysics[] = [
     startAngle: 1.0,
     surface: 'moon',
     parent: 'earth',
+  },
+  {
+    id: 'iss',
+    icon: 'radial-gradient(circle at 50% 50%, #e8eef6 0%, #8a9bb4 45%, #1d2a44 100%)',
+    diameterKm: 0.109, // 109 m from one end of the truss to the other
+    radius: 0.85, // bounding radius of the model: big enough to spot next to Earth
+    orbit: 13, // just above the atmosphere glow, well inside the Moon's orbit
+    orbitSeconds: 30, // really 16 laps a day; here about two per Earth day so it can be caught
+    spinSeconds: 0,
+    tilt: 0,
+    startAngle: 2.6,
+    inclination: 51.6,
+    parent: 'earth',
+    station: true,
   },
   {
     id: 'mars',

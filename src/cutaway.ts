@@ -115,6 +115,7 @@ export class Cutaway {
   open(body: Body, onEnd?: () => void) {
     this.close();
     const s = STRUCTURE[body.info.id];
+    if (!s) return; // a station has no layers (its card has no such block either)
     const inner = [...s.layers].reverse(); // centre outwards for the shader
     const u = this.material.uniforms;
     u.uCount.value = inner.length;
@@ -277,7 +278,7 @@ export class Cutaway {
     const inPlane = B.clone().addScaledVector(A, -B.dot(A)).normalize();
     const upOnFace = a.up.clone().addScaledVector(A, -a.up.dot(A)).normalize();
     const dir = inPlane.multiplyScalar(0.35).addScaledVector(upOnFace, 0.94).normalize();
-    const layers = STRUCTURE[a.body.info.id].layers;
+    const layers = STRUCTURE[a.body.info.id]!.layers;
     const w = window.innerWidth, h = window.innerHeight;
     const p = new THREE.Vector3();
     layers.forEach((l, i) => {

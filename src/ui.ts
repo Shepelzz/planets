@@ -50,6 +50,7 @@ function statMoons(b: BodyInfo): string {
 }
 
 function sizeCompare(info: BodyInfo): string {
+  if (!NARRATION[info.id].compare) return ''; // a station: no ball to compare
   const ratio = info.diameterKm / EARTH_DIAMETER;
   const max = 64;
   const big = Math.max(ratio, 1);
@@ -62,7 +63,7 @@ function sizeCompare(info: BodyInfo): string {
   else if (ratio <= 0.67) caption = fill(UI.compare_smaller, 1 / ratio);
   else caption = UI.compare_same;
   return `
-    <div class="compare talk" role="button" tabindex="0" data-say="${esc(NARRATION[info.id].compare)}">
+    <div class="compare talk" role="button" tabindex="0" data-say="${esc(NARRATION[info.id].compare!)}">
       ${SAY_MARK}
       <div class="compare-pics">
         <div class="compare-item">

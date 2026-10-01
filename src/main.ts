@@ -91,6 +91,8 @@ resize();
 // ---------- camera focus & flights ----------
 let focus: Body | null = null;
 const lastFocusPos = new THREE.Vector3();
+const lastFocusQuat = new THREE.Quaternion();
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 interface Flight {
   t: number;
@@ -98,8 +100,9 @@ interface Flight {
   fromPos: THREE.Vector3;
   fromTarget: THREE.Vector3;
   to: Body | null;
-  offset: THREE.Vector3; // final camera position relative to target
+  offset: THREE.Vector3; // final camera position relative to target (in a station's own frame for a station)
   overviewTarget?: THREE.Vector3;
+  fromUp: THREE.Vector3;
 }
 let flight: Flight | null = null;
 
@@ -144,7 +147,10 @@ function updateViewOffset() {
   camera.setViewOffset(w, h, viewShift.x, viewShift.y, w, h);
 }
 
+/** Where the camera ends up relative to the body it flies to; for a station in the station's own frame. */
 function focusOffset(b: Body) {
+  // a station: from behind, a bit to the side and above, so the planet sweeps by below it
+  if (b.station) return new THREE.Vector3(-0.55, -0.45, 0.7).normalize().multiplyScalar(fitDistance(b.viewRadius));
   const pos = b.anchor.position;
   const toSun = pos.lengthSq() > 0 ? pos.clone().negate().normalize() : new THREE.Vector3(0, 0, 1);
   const up = new THREE.Vector3(0, 1, 0);
@@ -168,12 +174,22 @@ function flyTo(b: Body | null, duration?: number) {
     to: b,
     offset: b ? focusOffset(b) : OVERVIEW_OFFSET.clone(),
     overviewTarget: b ? undefined : new THREE.Vector3(),
+    fromUp: camera.up.clone(),
   };
   // longer trips take a little longer, so the speed always feels calm
-  const dest = (b ? b.anchor.position : flight.overviewTarget!).clone().add(flight.offset);
+  const dest = (b ? b.anchor.position : flight.overviewTarget!).clone().add(worldOffset(flight));
   flight.duration = duration ?? THREE.MathUtils.clamp(2.2 + camera.position.distanceTo(dest) / 350, 2.4, 4.2);
   focus = b;
   controls.enabled = false;
+}
+
+function worldOffset(f: Flight) {
+  return f.to?.station ? f.offset.clone().applyQuaternion(f.to.tilt.quaternion) : f.offset;
+}
+
+/** Near a station "up" is away from its planet, so the planet always stays below; elsewhere it is world up. */
+function upFor(b: Body | null) {
+  return b?.station ? new THREE.Vector3(0, 0, 1).applyQuaternion(b.tilt.quaternion) : WORLD_UP;
 }
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -183,26 +199,30 @@ function updateFlight(dt: number) {
   flight.t = Math.min(1, flight.t + dt / flight.duration);
   const k = ease(flight.t);
   const target = flight.to ? flight.to.anchor.position : flight.overviewTarget!;
-  const endPos = target.clone().add(flight.offset);
+  const endPos = target.clone().add(worldOffset(flight));
   controls.target.lerpVectors(flight.fromTarget, target, k);
   camera.position.lerpVectors(flight.fromPos, endPos, k);
   // gentle arc so the path doesn't cut through planets
   const span = flight.fromPos.distanceTo(endPos);
   camera.position.y += Math.sin(Math.PI * k) * span * 0.12;
+  camera.up.lerpVectors(flight.fromUp, upFor(flight.to), k).normalize();
   camera.lookAt(controls.target);
   if (flight.t >= 1) {
     flight = null;
     controls.enabled = true;
     configureLimits();
   }
-  if (focus) lastFocusPos.copy(focus.anchor.position);
+  if (focus) {
+    lastFocusPos.copy(focus.anchor.position);
+    lastFocusQuat.copy(focus.tilt.quaternion);
+  }
 }
 
 function configureLimits() {
   if (focus) {
     const r = focus.info.radius;
     controls.minDistance = r * (focus.info.id === 'sun' ? 1.6 : 1.25);
-    controls.maxDistance = Math.max(fitDistance(focus.viewRadius) * 6, r * 20);
+    controls.maxDistance = focus.station ? fitDistance(focus.viewRadius) * 3 : Math.max(fitDistance(focus.viewRadius) * 6, r * 20);
   } else {
     controls.minDistance = 120; // stay outside the Sun
     controls.maxDistance = 2200;
@@ -212,10 +232,26 @@ function configureLimits() {
 /** Keep the camera riding along with the focused body as it orbits. */
 function followFocus() {
   if (!focus || flight) return;
-  const delta = focus.anchor.position.clone().sub(lastFocusPos);
-  camera.position.add(delta);
-  controls.target.add(delta);
+  if (focus.station) {
+    // ride in the station's own frame: as it circles the planet the view turns with it
+    const turn = focus.tilt.quaternion.clone().multiply(lastFocusQuat.invert());
+    for (const p of [camera.position, controls.target]) p.sub(lastFocusPos).applyQuaternion(turn).add(focus.anchor.position);
+    camera.up.copy(upFor(focus));
+    lastFocusQuat.copy(focus.tilt.quaternion);
+  } else {
+    camera.position.add(focus.anchor.position).sub(lastFocusPos);
+    controls.target.add(focus.anchor.position).sub(lastFocusPos);
+  }
   lastFocusPos.copy(focus.anchor.position);
+}
+
+/** Around a station the camera can swing towards the planet below: never let it sink into it. */
+function keepAbovePlanet() {
+  if (!focus?.station) return;
+  const planet = byId.get(focus.info.parent!)!;
+  const min = planet.info.radius * 1.03;
+  const rel = camera.position.clone().sub(planet.anchor.position);
+  if (rel.length() < min) camera.position.copy(planet.anchor.position).addScaledVector(rel.normalize(), min);
 }
 
 function adaptNearPlane() {
@@ -360,12 +396,15 @@ function occluded(b: Body) {
 }
 
 function updateLabels() {
-  const earth = screenInfo(byId.get('earth')!);
   for (const b of bodies) {
     const el = labels.get(b.info.id)!;
     const s = screenInfo(b);
     let show = !s.behind && s.pxRadius < 90 && b !== focus && !flight && !occluded(b);
-    if (b.info.id === 'moon' && Math.hypot(s.x - earth.x, s.y - earth.y) < 40) show = false;
+    // a moon or station drawn right next to its planet: the planet's label is enough
+    if (b.info.parent && byId.get(b.info.parent) !== focus) {
+      const p = screenInfo(byId.get(b.info.parent)!);
+      if (Math.hypot(s.x - p.x, s.y - p.y) < p.pxRadius + 40) show = false;
+    }
     el.classList.toggle('show', show);
     if (show) el.style.transform = `translate(-50%, 0) translate(${s.x.toFixed(1)}px, ${(s.y + s.pxRadius + 8).toFixed(1)}px)`;
   }
@@ -416,6 +455,7 @@ function frame(now: number) {
   followFocus();
   // during a flight the camera is ours: OrbitControls would clamp it to the old planet's zoom limits
   if (!flight) controls.update();
+  keepAbovePlanet();
   updateViewOffset();
   adaptNearPlane();
   sky.group.position.copy(camera.position);

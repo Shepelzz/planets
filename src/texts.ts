@@ -27,7 +27,8 @@ export interface Narration {
   intro: string;
   /** stat id → what the voice says (no entry for the «inside» block: it opens the cut-away) */
   stats: Record<string, string>;
-  compare: string;
+  /** the «compared to Earth» picture; none for a station */
+  compare?: string;
 }
 
 export interface Layer {
@@ -59,7 +60,8 @@ export type UiTexts = Record<(typeof UI_KEYS)[number], string>;
 export interface Content {
   BODIES: BodyInfo[];
   NARRATION: Record<BodyId, Narration>;
-  STRUCTURE: Record<BodyId, Structure>;
+  /** only bodies with layers (structure.ts) */
+  STRUCTURE: Partial<Record<BodyId, Structure>>;
   UI: UiTexts;
 }
 
@@ -83,7 +85,7 @@ export function buildContent(raw: unknown): Content {
   const bodies = obj(root.bodies, 'bodies');
   const BODIES: BodyInfo[] = [];
   const NARRATION = {} as Record<BodyId, Narration>;
-  const STRUCTURE = {} as Record<BodyId, Structure>;
+  const STRUCTURE: Partial<Record<BodyId, Structure>> = {};
 
   for (const phys of PHYSICS) {
     const id = phys.id;
@@ -98,20 +100,25 @@ export function buildContent(raw: unknown): Content {
       stats.push({ id: sid, label: str(s, 'label', `${where}.stats.${sid}`), value: str(s, 'value', `${where}.stats.${sid}`) });
       if (sid !== INSIDE_STAT) say[sid] = str(s, 'say', `${where}.stats.${sid}`);
     }
-    if (!(INSIDE_STAT in statsRaw)) fail(`${where}.stats`, `немає блока «${INSIDE_STAT}» (розріз)`);
+    const layered = LAYERS[id];
+    if (layered && !(INSIDE_STAT in statsRaw)) fail(`${where}.stats`, `немає блока «${INSIDE_STAT}» (розріз)`);
+    if (!layered && (INSIDE_STAT in statsRaw || t.inside)) fail(`${where}`, `розрізу для цього тіла немає (structure.ts)`);
 
     const facts = t.facts;
     if (!Array.isArray(facts) || !facts.length || facts.some((f) => typeof f !== 'string' || !f.trim()))
       fail(`${where}.facts`, 'потрібен список фактів (рядки з «- »)');
 
-    const inside = obj(t.inside, `${where}.inside`);
-    const layerTexts = obj(inside.layers, `${where}.inside.layers`);
-    const layers: Layer[] = LAYERS[id].map((l) => {
-      const lt = obj(layerTexts[l.id], `${where}.inside.layers.${l.id}`);
-      return { ...l, name: str(lt, 'name', `${where}.inside.layers.${l.id}`), text: str(lt, 'say', `${where}.inside.layers.${l.id}`) };
-    });
-    for (const lid of Object.keys(layerTexts))
-      if (!LAYERS[id].some((l) => l.id === lid)) fail(`${where}.inside.layers.${lid}`, 'такого шару в коді немає (structure.ts)');
+    if (layered) {
+      const inside = obj(t.inside, `${where}.inside`);
+      const layerTexts = obj(inside.layers, `${where}.inside.layers`);
+      const layers: Layer[] = layered.map((l) => {
+        const lt = obj(layerTexts[l.id], `${where}.inside.layers.${l.id}`);
+        return { ...l, name: str(lt, 'name', `${where}.inside.layers.${l.id}`), text: str(lt, 'say', `${where}.inside.layers.${l.id}`) };
+      });
+      for (const lid of Object.keys(layerTexts))
+        if (!layered.some((l) => l.id === lid)) fail(`${where}.inside.layers.${lid}`, 'такого шару в коді немає (structure.ts)');
+      STRUCTURE[id] = { intro: str(inside, 'intro', `${where}.inside`), layers };
+    }
 
     BODIES.push({
       ...phys,
@@ -121,8 +128,8 @@ export function buildContent(raw: unknown): Content {
       stats,
       facts: facts as string[],
     });
-    NARRATION[id] = { intro: str(t, 'intro', where), stats: say, compare: str(t, 'compare', where) };
-    STRUCTURE[id] = { intro: str(inside, 'intro', `${where}.inside`), layers };
+    if (phys.station && t.compare) fail(`${where}.compare`, 'для станції порівняння із Землею не показується');
+    NARRATION[id] = { intro: str(t, 'intro', where), stats: say, compare: phys.station ? undefined : str(t, 'compare', where) };
   }
   for (const id of Object.keys(bodies)) if (!PHYSICS.some((p) => p.id === id)) fail(`bodies.${id}`, 'такого тіла в коді немає (data.ts)');
 

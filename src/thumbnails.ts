@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { BodyId } from './data';
+import { PHYSICS, type BodyId } from './data';
+import { makeStation } from './station';
 import { CHARON_TINT_GLSL, TEXTURE_FILES, UNSEEN_FILL_GLSL } from './surfaces';
 import { loadTexture, SRGB_GLSL } from './textures';
 
@@ -69,8 +70,26 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
   ball.scale.setScalar(Math.tan((camera.fov * Math.PI) / 360) * camera.position.z * 0.94);
   scene.add(ball);
 
+  // the ISS: its model seen from above, wings towards us, lit from the upper left
+  const station = makeStation(1, new THREE.Vector3(-4, 2.5, 5).multiplyScalar(1000), new THREE.Vector4(0, 0, 0, 0));
+  const stationView = new THREE.Group();
+  station.model.rotation.set(0, 0, Math.PI / 2); // truss across the picture
+  station.model.scale.multiplyScalar(Math.tan((camera.fov * Math.PI) / 360) * camera.position.z * 0.92);
+  stationView.add(station.model);
+  stationView.rotation.set(0.5, -0.35, 0);
+  for (const g of station.arrays) g.rotation.y = -1.25; // wings almost facing us (their face is along x)
+
   const out: Record<string, string> = {};
   for (const id of ids) {
+    const isStation = PHYSICS.some((p) => p.id === id && p.station);
+    ball.visible = !isStation;
+    if (isStation) {
+      scene.add(stationView);
+      renderer.render(scene, camera);
+      scene.remove(stationView);
+      out[id] = canvas.toDataURL('image/png');
+      continue;
+    }
     mat.uniforms.uMap.value = loadTexture(TEXTURE_FILES[id as keyof typeof TEXTURE_FILES]);
     mat.uniforms.uHasClouds.value = id === 'earth' ? 1 : 0;
     mat.uniforms.uEmissive.value = id === 'sun' ? 1 : 0;
@@ -84,6 +103,8 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
 
   geo.dispose();
   mat.dispose();
+  for (const m of station.materials) m.dispose();
+  stationView.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
   renderer.dispose();
   renderer.forceContextLoss();
   return out;

@@ -12,7 +12,7 @@ export interface LayerPhysics {
   color: string;
 }
 
-export const LAYERS: Record<BodyId, LayerPhysics[]> = {
+export const LAYERS: Partial<Record<BodyId, LayerPhysics[]>> = {
   sun: [
     { id: 'convection', to: 1, color: '#ff8a2a' },
     { id: 'radiation', to: 0.7, color: '#ffc04a' },
