@@ -12,6 +12,9 @@ services:
       - path: /textures/*
         name: Cache-Control
         value: public, max-age=604800
+      - path: /models/*
+        name: Cache-Control
+        value: public, max-age=604800
       # recordings are named by a hash of their text, so a changed phrase gets a new URL
       - path: /voice/*
         name: Cache-Control

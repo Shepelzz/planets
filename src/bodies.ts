@@ -4,6 +4,7 @@ import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
 import { loadTexture, SRGB_GLSL } from './textures';
 import { makeStation, trackSun, type Station } from './station';
+import { loadStationModel, turnWings, type RealStation } from './stationModel';
 
 const DEG = Math.PI / 180;
 
@@ -37,7 +38,7 @@ export interface Body {
   mesh: THREE.Object3D;
   clouds?: THREE.Mesh;
   /** a spacecraft: flies nose first, turns its wings to the Sun, hides in Earth's shadow */
-  station?: Station & { occluder: THREE.Vector4 };
+  station?: Station & { occluder: THREE.Vector4; real?: RealStation; loading?: boolean };
   /** Radius that must fit on screen when we fly to this body (rings included). */
   viewRadius: number;
   orbitAngle: number;
@@ -528,15 +529,39 @@ const upV = new THREE.Vector3();
 const sideV = new THREE.Vector3();
 const basis = new THREE.Matrix4();
 
+/** Closer than this (scene units) the real model replaces the hand-made one. */
+const REAL_MODEL_RANGE = 30;
+
+/** Start loading the real station model (once); the hand-made one stays until it arrives or if it fails. */
+export function loadRealStation(b: Body) {
+  const s = b.station;
+  if (!s || s.real || s.loading) return;
+  s.loading = true;
+  loadStationModel(lowDetail ? 'iss-lite.glb' : 'iss.glb', b.info.radius, s.materials[0].uniforms.uSunPos.value, s.occluder)
+    .then((real) => {
+      s.real = real;
+      real.model.visible = false;
+      b.tilt.add(real.model);
+    })
+    .catch((e) => console.warn('station model failed to load', e));
+}
+
 /** Station attitude: nose along the orbit, truss across it, top away from the planet; wings to the Sun. */
-function flyNoseFirst(b: Body, parent: Body) {
+function flyNoseFirst(b: Body, parent: Body, viewer?: THREE.Vector3) {
   const s = b.station!;
   orbitOffset(b.info, b.orbitAngle + 0.01, fwd).add(parent.anchor.position).sub(b.anchor.position).normalize();
   upV.subVectors(b.anchor.position, parent.anchor.position).normalize();
   sideV.crossVectors(upV, fwd).normalize();
   fwd.crossVectors(sideV, upV);
   b.tilt.quaternion.setFromRotationMatrix(basis.makeBasis(fwd, sideV, upV));
-  trackSun(s, b.tilt.quaternion, tmp.copy(b.anchor.position).negate().normalize());
+  const toSun = tmp.copy(b.anchor.position).negate().normalize();
+  const near = !!viewer && viewer.distanceTo(b.anchor.position) < REAL_MODEL_RANGE;
+  if (near) loadRealStation(b);
+  const real = near && s.real;
+  s.model.visible = !real;
+  if (s.real) s.real.model.visible = !!real;
+  if (real) turnWings(real, toSun.applyQuaternion(b.tilt.quaternion.clone().invert()));
+  else trackSun(s, b.tilt.quaternion, toSun);
   s.occluder.set(parent.anchor.position.x, parent.anchor.position.y, parent.anchor.position.z, parent.info.radius);
 }
 
@@ -557,7 +582,7 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
     b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position)).add(origin);
-    if (b.station) flyNoseFirst(b, parent!);
+    if (b.station) flyNoseFirst(b, parent!, viewer);
     // moons (the Moon, Charon) keep one face towards their planet
     else b.mesh.rotation.y = parent ? b.orbitAngle + Math.PI : b.spinAngle;
     if (b.clouds) b.clouds.rotation.y = b.spinAngle * 1.08;

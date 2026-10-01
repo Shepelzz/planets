@@ -2,7 +2,7 @@
 import 'pepjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createBodies, createOrbitLines, updateBodies, type Body } from './bodies';
+import { createBodies, createOrbitLines, loadRealStation, updateBodies, type Body } from './bodies';
 import type { BodyId } from './data';
 import { createSky } from './sky';
 import { createUI } from './ui';
@@ -164,6 +164,7 @@ function focusOffset(b: Body) {
 
 function flyTo(b: Body | null, duration?: number) {
   cutaway.close();
+  if (b?.station) loadRealStation(b); // fetch the detailed model while we fly
   if (b) say(NARRATION[b.info.id].intro);
   ui.setSelected(b ? b.info.id : null); // first, so the panel's size is known for framing
   flight = {
