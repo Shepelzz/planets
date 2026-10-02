@@ -6,7 +6,8 @@ import type { BodyId } from './data';
 // planet or one of its moons. While visiting any planet the orbits make room so the neighbours don't
 // loom over it: the inner planets stay, the visited planet moves out to 3× its gap from the inner
 // neighbour (the Sun for Mercury), every planet beyond it to 5× its distance from the visited one
-// (always at least enough to clear a moon system). Back in the overview all return to place. The
+// (always at least enough to clear a moon system); at the Sun all planets move out to 5× their
+// distance. Back in the overview all return to place. The
 // move is a soft spring: no jerk at the start or the end, and the camera rides along.
 
 const ROOM = 4; // gap left between systems
@@ -43,7 +44,10 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
   function spread(focus: Body | null, dt: number) {
     const visiting = visitedBy(focus);
     const target = new Map<Body, number>(planets.map((p) => [p, p.info.orbit]));
-    if (visiting && planets.includes(visiting)) {
+    if (visiting === sun) {
+      // at the Sun every planet is "beyond" it: all move out to 5× their distance
+      for (const p of planets) target.set(p, p.info.orbit * 5);
+    } else if (visiting && planets.includes(visiting)) {
       const r = visiting.info.orbit;
       const i = sorted.indexOf(visiting);
       const prev = sorted[i - 1];
