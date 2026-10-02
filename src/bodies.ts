@@ -647,7 +647,7 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
   const byId = new Map(bodies.map((b) => [b.info.id, b]));
   for (const b of bodies) {
     const i = b.info;
-    if (i.orbitSeconds > 0) b.orbitAngle += (dt / i.orbitSeconds) * Math.PI * 2;
+    if (i.orbitSeconds) b.orbitAngle += (dt / i.orbitSeconds) * Math.PI * 2;
     if (i.spinSeconds > 0) b.spinAngle += (dt / i.spinSeconds) * Math.PI * 2;
   }
   // parents first: BODIES order already lists Earth before the Moon

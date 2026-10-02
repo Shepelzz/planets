@@ -39,10 +39,12 @@ const CUT_MARK = '<svg class="say-mark cut-mark" viewBox="0 0 24 24" aria-hidden
 const SAY_MARK = '<svg class="say-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
 const moonsOf = (id: BodyId) => BODIES.filter((b) => b.parent === id);
+/** Real moons only: a station flies around the planet too (moons row), but it isn't a moon (card, badge). */
+const naturalMoonsOf = (id: BodyId) => moonsOf(id).filter((b) => !b.station);
 
 /** Buttons for the moons we can fly to, inside the card's «Супутники» block. */
 function statMoons(b: BodyInfo): string {
-  const moons = moonsOf(b.id);
+  const moons = naturalMoonsOf(b.id);
   if (!moons.length) return '';
   return `<div class="stat-moons">${moons
     .map((m) => `<button class="stat-moon" data-moon="${m.id}"><span class="moon-ball${iconClass(m)}" style="background:${iconBg(m)}"></span>${m.name}</button>`)
@@ -118,7 +120,7 @@ export function createUI(h: Handlers) {
     prevGroup = group;
     const chip = document.createElement('button');
     chip.className = 'chip' + (b.rings ? ' ringed' : '') + (b.id === 'sun' ? ' star' : '');
-    const moonCount = moonsOf(b.id).length;
+    const moonCount = naturalMoonsOf(b.id).length;
     const badge = moonCount ? `<span class="chip-badge" aria-label="супутників: ${moonCount}">${moonCount}</span>` : '';
     chip.innerHTML = `<span class="chip-ball">${badge}</span><span class="chip-name">${b.name}</span>`;
     chip.addEventListener('click', () => h.onSelect(b.id));

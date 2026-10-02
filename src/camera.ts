@@ -83,8 +83,9 @@ export class CameraDirector {
   /** How far from a body the camera stops: on upright phones and tablets edge to edge, elsewhere fitDistance. */
   private arriveDistance(b: Body) {
     if (!this.fillsWidth()) return this.fitDistance(b.viewRadius);
-    // the ball itself (rings included: they must fit too); glow and atmosphere may spill over the edges
-    const r = b.info.rings ? b.viewRadius : b.info.radius;
+    // the ball itself; glow and atmosphere may spill over the edges, and so may the rings' tips
+    // (fitting the whole rings left Saturn's ball small)
+    const r = b.info.rings ? b.viewRadius * 0.72 : b.info.radius;
     const tanH = Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect;
     return r / Math.sin(Math.atan(tanH));
   }
