@@ -232,7 +232,7 @@ function frame(now: number) {
   if (playing) simTime += dt;
   systems.spread(director.focus, rawDt > 0.5 ? 0.5 : rawDt);
   updateBodies(bodies, playing ? dt : 0, simTime, lines, camera.position);
-  systems.visibility(director.focus);
+  systems.visibility(director.focus, Math.min(rawDt, 0.1));
   director.update(rawDt);
   cutaway.update(Math.min(rawDt, 0.1));
   sky.group.position.copy(camera.position);

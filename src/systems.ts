@@ -84,8 +84,15 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
     }
   }
 
-  /** Show or hide moons (and their orbit lines) for this focus. */
-  function visibility(focus: Body | null) {
+  const LINE_OPACITY = 0.16;
+
+  /**
+   * Show or hide moons (and their orbit lines) for this focus. While looking at a body only its own
+   * system's orbit lines stay (its planet's orbit and the moons'); the others fade out, and back in
+   * the overview.
+   */
+  function visibility(focus: Body | null, dt: number) {
+    const k = 1 - Math.exp(-dt * 4);
     const host = visitedBy(focus);
     const visiting = host?.info.id ?? null;
     const reach = visiting ? systemReach.get(visiting) : undefined;
@@ -97,7 +104,11 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
         show = b.anchor.position.distanceTo(host.anchor.position) > reach + b.viewRadius;
       b.anchor.visible = show;
       const line = lines.get(b.info.id);
-      if (line) line.visible = show;
+      if (!line) continue;
+      const mat = line.material as THREE.LineBasicMaterial;
+      const want = show && (!host || mine) ? LINE_OPACITY : 0;
+      mat.opacity = !show ? 0 : Math.abs(want - mat.opacity) < 0.002 ? want : mat.opacity + (want - mat.opacity) * k;
+      line.visible = mat.opacity > 0;
     }
   }
 
