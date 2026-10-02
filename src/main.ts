@@ -9,6 +9,7 @@ import { Cutaway } from './cutaway';
 import type { BodyId } from './data';
 import { createDevTools } from './devTools';
 import { createLabels, listenForTaps, pickBody } from './labels';
+import { keepPointersOnCanvas } from './pointerFix';
 import { onAddressChange, pathSegment, showAddress } from './routes';
 import { createSky } from './sky';
 import { preload, say } from './speech';
@@ -75,6 +76,7 @@ cutLabels.id = 'cut-labels';
 document.body.appendChild(cutLabels);
 const cutaway = new Cutaway(scene, camera, cutLabels);
 
+keepPointersOnCanvas(canvas); // old iPads: fingers lifted over the panels must still reach the controls
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
