@@ -568,6 +568,8 @@ function makeStationBody(info: BodyInfo, scene: THREE.Scene): Body {
 interface CometParts {
   ion: THREE.ShaderMaterial;
   dust: THREE.ShaderMaterial;
+  ionSparks: THREE.ShaderMaterial;
+  dustSparks: THREE.ShaderMaterial;
   core: THREE.Sprite;
   haze: THREE.Sprite;
   veil: THREE.Sprite;
@@ -578,6 +580,8 @@ uniform float uLength;
 uniform float uR0;
 uniform float uR1;
 uniform float uBend;
+uniform float uWave;
+uniform float uTime;
 varying float vS;
 varying vec3 vRing;
 varying vec3 vWorldPos;
@@ -588,6 +592,9 @@ void main() {
   float r = mix(uR0, uR1, pow(s, 0.75));
   vec3 p = vec3(s * uLength, position.y * r, position.z * r);
   p.z += uBend * s * s * uLength; // the dust tail curves back along the path
+  // the solar wind shakes the tail: slow waves running from the head outwards
+  p.y += uWave * sin(s * 9.0 - uTime * 1.5) * s * r * 0.45;
+  p.z += uWave * sin(s * 6.0 - uTime * 1.1 + 1.7) * s * r * 0.3;
   vS = s;
   vRing = position;
   vec4 wp = modelMatrix * vec4(p, 1.0);
@@ -613,9 +620,13 @@ void main() {
   float body = pow(abs(dot(normalize(vWorldNormal), V)), uSoft);
   float along = smoothstep(0.0, 0.04, vS) * pow(1.0 - vS, 1.3);
   // thin streaks of gas flowing away from the head
-  float n = fbm(vec3(vRing.y * 1.7, vRing.z * 1.7, vS * 6.0 - uTime * 0.22), 2);
+  float n = fbm(vec3(vRing.y * 1.7, vRing.z * 1.7, vS * 6.0 - uTime * 0.5), 3);
   float streak = mix(1.0, 0.35 + 1.4 * max(n + 0.3, 0.0), uStreaks);
-  gl_FragColor = vec4(uColor, clamp(body * along * streak * uBright, 0.0, 1.0));
+  // glowing knots that break off near the head and race down the tail
+  float knot = pow(max(sin(vS * 22.0 - uTime * 2.4 + n * 3.0), 0.0), 6.0) * uStreaks * (1.0 - vS);
+  // a gentle flicker of the whole tail
+  float flicker = 0.88 + 0.12 * sin(uTime * 3.1 + vS * 4.0);
+  gl_FragColor = vec4(uColor * (1.0 + knot), clamp(body * along * (streak + knot * 1.5) * flicker * uBright, 0.0, 1.0));
 }`;
 
 let tailGeo: THREE.BufferGeometry | null = null;
@@ -643,8 +654,8 @@ function tailGeometry() {
   return tailGeo;
 }
 
-/** streaks: how stripy (gas) vs smooth (dust); soft: how much the glow keeps to the middle of the tube */
-function makeTail(color: THREE.Color, streaks: number, soft: number) {
+/** streaks: how stripy (gas) vs smooth (dust); soft: how much the glow keeps to the middle of the tube; wave: how much it sways */
+function makeTail(color: THREE.Color, streaks: number, soft: number, wave: number) {
   const mat = new THREE.ShaderMaterial({
     vertexShader: TAIL_VERT,
     fragmentShader: TAIL_FRAG,
@@ -657,6 +668,7 @@ function makeTail(color: THREE.Color, streaks: number, soft: number) {
       uBright: { value: 1 },
       uStreaks: { value: streaks },
       uSoft: { value: soft },
+      uWave: { value: wave },
       uTime: { value: 0 },
     },
     transparent: true,
@@ -669,11 +681,79 @@ function makeTail(color: THREE.Color, streaks: number, soft: number) {
   return { mesh, mat };
 }
 
+// Sparks: grains of dust and puffs of gas leaving the head and drifting down a tail, twinkling. Each
+// point only carries random numbers; the shader moves it along the same curve as its tail.
+const SPARK_VERT = /* glsl */ `
+attribute vec4 seed; // start along the tail, angle around it, distance from its middle, pace
+uniform float uLength;
+uniform float uR0;
+uniform float uR1;
+uniform float uBend;
+uniform float uTime;
+uniform float uSpeed;
+uniform float uSize;
+uniform float uBright;
+uniform float uViewH;
+varying float vA;
+void main() {
+  float s = fract(seed.x + uTime * uSpeed * (0.6 + 0.8 * seed.w));
+  float r = mix(uR0, uR1, pow(s, 0.75)) * seed.z;
+  vec3 p = vec3(s * uLength, cos(seed.y) * r, sin(seed.y) * r);
+  p.z += uBend * s * s * uLength;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = min(uSize * (0.5 + seed.w) * projectionMatrix[1][1] * uViewH * 0.5 / max(-mv.z, 0.001), 48.0);
+  float twinkle = 0.55 + 0.45 * sin(uTime * (3.0 + 5.0 * seed.w) + seed.x * 40.0);
+  vA = uBright * smoothstep(0.0, 0.06, s) * pow(1.0 - s, 1.5) * twinkle;
+}`;
+const SPARK_FRAG = /* glsl */ `
+uniform vec3 uColor;
+varying float vA;
+void main() {
+  float d = length(gl_PointCoord - 0.5);
+  gl_FragColor = vec4(uColor, vA * smoothstep(0.5, 0.0, d));
+}`;
+
+function makeSparks(count: number, color: THREE.Color, speed: number, size: number, seedOf: number) {
+  let n = seedOf;
+  const rand = () => ((n = (n * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const seeds = new Float32Array(count * 4);
+  for (let i = 0; i < count; i++) seeds.set([rand(), rand() * Math.PI * 2, Math.sqrt(rand()), rand()], i * 4);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3)); // unused, three needs it
+  geo.setAttribute('seed', new THREE.BufferAttribute(seeds, 4));
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: SPARK_VERT,
+    fragmentShader: SPARK_FRAG,
+    uniforms: {
+      uLength: { value: 100 },
+      uR0: { value: 1 },
+      uR1: { value: 10 },
+      uBend: { value: 0 },
+      uTime: { value: 0 },
+      uSpeed: { value: speed },
+      uSize: { value: size },
+      uBright: { value: 1 },
+      uViewH: { value: 800 },
+      uColor: { value: color },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  return { points, mat };
+}
+
 function makeComet(info: BodyInfo, scene: THREE.Scene): Body {
   const b = makePlanet(info, scene);
-  const ion = makeTail(new THREE.Color(0.42, 0.66, 1.0), 1, 1.6);
-  const dust = makeTail(new THREE.Color(1.0, 0.88, 0.7), 0.35, 3);
+  const ion = makeTail(new THREE.Color(0.42, 0.66, 1.0), 1, 1.6, 1);
+  const dust = makeTail(new THREE.Color(1.0, 0.88, 0.7), 0.35, 3, 0.35);
   b.tilt.add(dust.mesh, ion.mesh);
+  const dustSparks = makeSparks(lowDetail ? 140 : 320, new THREE.Color(1.0, 0.86, 0.62), 0.05, 0.22, 7);
+  const ionSparks = makeSparks(lowDetail ? 80 : 180, new THREE.Color(0.55, 0.78, 1.0), 0.11, 0.16, 13);
+  b.tilt.add(dustSparks.points, ionSparks.points);
   const glow = (stops: [number, string][]) =>
     new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(stops), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
   const core = glow([[0, 'rgba(255,255,255,1)'], [0.12, 'rgba(225,245,255,0.8)'], [0.4, 'rgba(150,215,255,0.22)'], [1, 'rgba(120,200,255,0)']]);
@@ -684,8 +764,8 @@ function makeComet(info: BodyInfo, scene: THREE.Scene): Body {
   veil.renderOrder = 2;
   veil.scale.setScalar(info.radius * 3.4);
   b.anchor.add(haze, core, veil);
-  b.comet = { ion: ion.mat, dust: dust.mat, core, haze, veil };
-  b.viewRadius = info.radius * 7; // frame the glowing head and the start of the tails, not just the nucleus
+  b.comet = { ion: ion.mat, dust: dust.mat, ionSparks: ionSparks.mat, dustSparks: dustSparks.mat, core, haze, veil };
+  b.viewRadius = info.radius * 4.5; // frame the glowing head and the start of the tails, not just the nucleus
   return b;
 }
 
@@ -737,9 +817,19 @@ function updateComet(b: Body, time: number, viewer?: THREE.Vector3) {
   dust.uBend.value = 0.3 * behind;
   dust.uBright.value = (0.08 + 0.3 * act) * bold;
   ion.uTime.value = dust.uTime.value = time;
+  // sparks follow their tail's shape; only close up (from afar they would be noise)
+  for (const [sp, tail, bright] of [[parts.ionSparks, ion, 0.9], [parts.dustSparks, dust, 0.8]] as const) {
+    const u = sp.uniforms;
+    for (const k of ['uLength', 'uR0', 'uR1', 'uBend'] as const) u[k].value = tail[k].value;
+    u.uTime.value = time;
+    u.uBright.value = bright * (0.3 + 0.7 * act) * (1 - far);
+    u.uViewH.value = window.innerHeight * Math.min(window.devicePixelRatio || 1, 2);
+  }
   const R = b.info.radius;
-  parts.core.scale.setScalar(R * (4 + 4 * act));
-  parts.haze.scale.setScalar(R * (10 + 22 * act) * (1 + 0.8 * far));
+  // the head breathes: its glow swells and settles
+  const breath = 1 + 0.07 * Math.sin(time * 2.3) + 0.04 * Math.sin(time * 3.7 + 1);
+  parts.core.scale.setScalar(R * (4 + 4 * act) * breath);
+  parts.haze.scale.setScalar(R * (10 + 22 * act) * (1 + 0.8 * far) * (2 - breath));
   parts.haze.material.opacity = 0.35 + 0.65 * act;
   parts.veil.material.opacity = (0.4 + 0.6 * act) * (1 - far); // only close up: from afar it would shine through planets
 }
