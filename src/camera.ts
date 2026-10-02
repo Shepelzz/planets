@@ -74,6 +74,21 @@ export class CameraDirector {
     return (r / Math.sin(Math.atan(t))) * 1.18;
   }
 
+  /** Phones and tablets held upright: a chosen body spans the whole screen width. */
+  private portraitTouch = window.matchMedia('(pointer: coarse)');
+  private fillsWidth() {
+    return this.portraitTouch.matches && window.innerHeight > window.innerWidth;
+  }
+
+  /** How far from a body the camera stops: on upright phones and tablets edge to edge, elsewhere fitDistance. */
+  private arriveDistance(b: Body) {
+    if (!this.fillsWidth()) return this.fitDistance(b.viewRadius);
+    // the ball itself (rings included: they must fit too); glow and atmosphere may spill over the edges
+    const r = b.info.rings ? b.viewRadius : b.info.radius;
+    const tanH = Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect;
+    return r / Math.sin(Math.atan(tanH));
+  }
+
   /** Start a flight to a body (null: the overview). The info panel must be set up first: it changes the framing. */
   flyTo(b: Body | null, duration?: number) {
     const { camera, controls } = this;
@@ -110,7 +125,7 @@ export class CameraDirector {
   /** Where the camera ends up relative to the body it flies to; for a station in the station's own frame. */
   private focusOffset(b: Body) {
     // a station: from behind, a bit to the side and above, so the planet sweeps by below it
-    if (b.station) return new THREE.Vector3(-0.55, -0.45, 0.7).normalize().multiplyScalar(this.fitDistance(b.viewRadius));
+    if (b.station) return new THREE.Vector3(-0.55, -0.45, 0.7).normalize().multiplyScalar(this.arriveDistance(b));
     const pos = b.anchor.position;
     const toSun = pos.lengthSq() > 0 ? pos.clone().negate().normalize() : new THREE.Vector3(0, 0, 1);
     const up = new THREE.Vector3(0, 1, 0);
@@ -119,7 +134,7 @@ export class CameraDirector {
     const dir = toSun.multiplyScalar(0.62).addScaledVector(side, 0.78).addScaledVector(up, 0.2).normalize();
     if (b.info.id === 'sun') dir.set(0.3, 0.25, 1).normalize();
     if (b.info.rings) dir.addScaledVector(up, 0.25).normalize();
-    return dir.multiplyScalar(this.fitDistance(b.viewRadius));
+    return dir.multiplyScalar(this.arriveDistance(b));
   }
 
   private worldOffset(f: Flight) {

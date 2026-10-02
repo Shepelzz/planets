@@ -3,10 +3,11 @@ import type { Body } from './bodies';
 import type { BodyId } from './data';
 
 // Moon systems shown only while visiting: a giant's moons (and Mars's) appear when we fly to the
-// planet or one of its moons. While visiting such a planet the orbits make room for its moon system:
-// the planet itself moves out a little if the inner neighbours are too close, and every planet beyond
-// it moves further out, just enough to clear it (the camera rides along). Back in the overview all
-// return to place. Another planet or moon still passing through the system is hidden.
+// planet or one of its moons. While visiting any planet the orbits make room so the neighbours don't
+// loom over it: the inner planets stay, the visited planet moves out to 3× its gap from the inner
+// neighbour (the Sun for Mercury), every planet beyond it to 5× its distance from the visited one
+// (always at least enough to clear a moon system). Back in the overview all return to place. The
+// move is a soft spring: no jerk at the start or the end, and the camera rides along.
 
 const ROOM = 4; // gap left between systems
 
@@ -35,30 +36,51 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
   /** the planet whose system we are in (the focused body or its parent) */
   const visitedBy = (focus: Body | null) => (focus ? byId.get(focus.info.parent ?? focus.info.id)! : null);
 
+  const sorted = [...planets].sort((x, y) => x.info.orbit - y.info.orbit);
+  const speed = new Map<Body, number>(planets.map((p) => [p, 0]));
+
   /** Move the orbits towards where they should be for this focus (smoothly, dt in seconds). */
   function spread(focus: Body | null, dt: number) {
     const visiting = visitedBy(focus);
-    const reach = visiting ? systemReach.get(visiting.info.id) : undefined;
     const target = new Map<Body, number>(planets.map((p) => [p, p.info.orbit]));
-    if (visiting && reach !== undefined) {
-      const r = visiting.info.orbit, band = Math.max(reach, visiting.viewRadius) + ROOM;
-      let inner = 0;
-      for (const p of planets) if (p.info.orbit < r) inner = Math.max(inner, p.info.orbit + extents.get(p)!);
-      const at = Math.max(r, inner + band);
+    if (visiting && visiting !== sun) {
+      const r = visiting.info.orbit;
+      const i = sorted.indexOf(visiting);
+      const prev = sorted[i - 1];
+      const reach = systemReach.get(visiting.info.id);
+      const band = Math.max(reach ?? 0, visiting.viewRadius) + ROOM;
+      // the inner neighbour's edge: a planet with its moons and rings, or the Sun's surface
+      const innerOrbit = prev ? prev.info.orbit : 0;
+      const innerEdge = prev ? prev.info.orbit + extents.get(prev)! : sun.info.radius;
+      const at = Math.max(innerOrbit + (r - innerOrbit) * 3, innerEdge + band);
       target.set(visiting, at);
       let limit = at + band;
-      for (const p of planets.filter((x) => x.info.orbit > r).sort((x, y) => x.info.orbit - y.info.orbit)) {
+      for (const p of sorted.slice(i + 1)) {
         const e = extents.get(p)!;
-        const t = Math.max(p.info.orbit, limit + e);
+        const t = Math.max(at + (p.info.orbit - r) * 5, limit + e);
         target.set(p, t);
         limit = t + e + ROOM;
       }
     }
-    const k = 1 - Math.exp(-dt * 2.5);
+    // critically damped spring: starts and stops gently, about 2.5 s to settle
+    const w = 2.6;
     for (const p of planets) {
       const t = target.get(p)!;
       const now = p.orbitR ?? p.info.orbit;
-      p.orbitR = Math.abs(t - now) < 0.01 ? t : now + (t - now) * k;
+      let v = speed.get(p)!;
+      let next = now;
+      // small steps, so a stuttering frame can't make the spring overshoot
+      for (let left = dt; left > 0; left -= 1 / 60) {
+        const h = Math.min(left, 1 / 60);
+        v += (w * w * (t - next) - 2 * w * v) * h;
+        next += v * h;
+      }
+      if (Math.abs(t - next) < 0.01 && Math.abs(v) < 0.05) {
+        next = t;
+        v = 0;
+      }
+      speed.set(p, v);
+      p.orbitR = next;
     }
   }
 
