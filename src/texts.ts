@@ -1,4 +1,4 @@
-import { PHYSICS, type BodyId, type BodyPhysics } from './data.ts';
+import { isBall, PHYSICS, type BodyId, type BodyPhysics } from './data.ts';
 import { LAYERS } from './structure.ts';
 
 // texts.yaml is the single source of every text in the app. This module joins it with the physical
@@ -27,7 +27,7 @@ export interface Narration {
   intro: string;
   /** stat id → what the voice says (no entry for the «inside» block: it opens the cut-away) */
   stats: Record<string, string>;
-  /** the «compared to Earth» picture; none for a station */
+  /** the «compared to Earth» picture; none for the station and the comet */
   compare?: string;
 }
 
@@ -128,8 +128,8 @@ export function buildContent(raw: unknown): Content {
       stats,
       facts: facts as string[],
     });
-    if (phys.station && t.compare) fail(`${where}.compare`, 'для станції порівняння із Землею не показується');
-    NARRATION[id] = { intro: str(t, 'intro', where), stats: say, compare: phys.station ? undefined : str(t, 'compare', where) };
+    if (!isBall(phys) && t.compare) fail(`${where}.compare`, 'для станції й комети порівняння із Землею не показується');
+    NARRATION[id] = { intro: str(t, 'intro', where), stats: say, compare: isBall(phys) ? str(t, 'compare', where) : undefined };
   }
   for (const id of Object.keys(bodies)) if (!PHYSICS.some((p) => p.id === id)) fail(`bodies.${id}`, 'такого тіла в коді немає (data.ts)');
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BODIES, type BodyInfo } from './content';
+import type { CometOrbit } from './data';
 import { BUMP_GLSL, NOISE_GLSL } from './noise';
 import { BUMP, SURFACES, TEXTURE_FILES } from './surfaces';
 import { hasDetail, loadDetail, loadTexture, SRGB_GLSL } from './textures';
@@ -53,7 +54,12 @@ export interface Body {
   cut: CutUniforms;
   /** atmosphere glow, hidden while the planet is cut open */
   atmosphere?: THREE.ShaderMaterial;
+  /** a comet's glowing head and tails, changed every frame by how close it is to the Sun */
+  comet?: CometParts;
 }
+
+/** The surface's map file; none for a made-up surface (the comet's nucleus). */
+const mapFile = (info: BodyInfo): string | undefined => (TEXTURE_FILES as Record<string, string>)[info.surface!];
 
 // set in createBodies: old devices get far fewer triangles (the maps carry the detail anyway)
 let sphereGeo: THREE.SphereGeometry;
@@ -371,7 +377,9 @@ export function showDetail(b: Body | null) {
   }
   if (!b || !b.info.surface) return;
   const u = b.materials[0].uniforms;
-  const maps: [string, string][] = [['uMap', TEXTURE_FILES[b.info.surface]]];
+  const file = mapFile(b.info);
+  if (!file) return; // a made-up surface (the comet): nothing to sharpen
+  const maps: [string, string][] = [['uMap', file]];
   if (b.info.clouds) maps.push(['uClouds', 'earth_clouds.jpg']);
   const mine: Detail = { body: b, swaps: [] };
   detail = mine;
@@ -414,7 +422,7 @@ function makePlanet(info: BodyInfo, scene: THREE.Scene): Body {
     uTime: { value: 0 },
     uRadius: { value: info.radius },
     uBump: { value: BUMP[info.surface!] ?? 0 },
-    uMap: { value: loadTexture(TEXTURE_FILES[info.surface!]) },
+    uMap: { value: mapFile(info) ? loadTexture(mapFile(info)!) : null },
     uNight: { value: info.surface === 'earth' ? loadTexture('earth_night.jpg') : null },
     uCenter: { value: anchor.position },
     uHasRings: { value: hasRings ? 1 : 0 },
@@ -550,12 +558,197 @@ function makeStationBody(info: BodyInfo, scene: THREE.Scene): Body {
   };
 }
 
+// ---------- the comet ----------
+// The nucleus is an ordinary lumpy body (makePlanet). Around it: a glowing head (coma) and two tails
+// pointing away from the Sun — the straight blue gas tail and the wider, curved dust tail, which lags
+// behind along the path. All of them grow and brighten near the Sun and shrink far from it. The
+// body's tilt group is turned every frame so its x axis points away from the Sun and its y axis
+// along the loop's "up": the tails live in it, and the camera rides in it (the tails stay sideways).
+
+interface CometParts {
+  ion: THREE.ShaderMaterial;
+  dust: THREE.ShaderMaterial;
+  core: THREE.Sprite;
+  haze: THREE.Sprite;
+  veil: THREE.Sprite;
+}
+
+const TAIL_VERT = /* glsl */ `
+uniform float uLength;
+uniform float uR0;
+uniform float uR1;
+uniform float uBend;
+varying float vS;
+varying vec3 vRing;
+varying vec3 vWorldPos;
+varying vec3 vWorldNormal;
+void main() {
+  // position = (along the tail 0..1, cos, sin of the angle around it)
+  float s = position.x;
+  float r = mix(uR0, uR1, pow(s, 0.75));
+  vec3 p = vec3(s * uLength, position.y * r, position.z * r);
+  p.z += uBend * s * s * uLength; // the dust tail curves back along the path
+  vS = s;
+  vRing = position;
+  vec4 wp = modelMatrix * vec4(p, 1.0);
+  vWorldPos = wp.xyz;
+  vWorldNormal = normalize(mat3(modelMatrix) * vec3(0.0, position.y, position.z));
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+
+const TAIL_FRAG = /* glsl */ `
+uniform vec3 uColor;
+uniform float uBright;
+uniform float uStreaks;
+uniform float uSoft;
+uniform float uTime;
+varying float vS;
+varying vec3 vRing;
+varying vec3 vWorldPos;
+varying vec3 vWorldNormal;
+${NOISE_GLSL}
+void main() {
+  // a see-through glowing tube: brightest where we look through its middle, fading at the sides
+  vec3 V = normalize(cameraPosition - vWorldPos);
+  float body = pow(abs(dot(normalize(vWorldNormal), V)), uSoft);
+  float along = smoothstep(0.0, 0.04, vS) * pow(1.0 - vS, 1.3);
+  // thin streaks of gas flowing away from the head
+  float n = fbm(vec3(vRing.y * 1.7, vRing.z * 1.7, vS * 6.0 - uTime * 0.22), 2);
+  float streak = mix(1.0, 0.35 + 1.4 * max(n + 0.3, 0.0), uStreaks);
+  gl_FragColor = vec4(uColor, clamp(body * along * streak * uBright, 0.0, 1.0));
+}`;
+
+let tailGeo: THREE.BufferGeometry | null = null;
+/** A tube along x from 0 to 1 (more rings near the head), radius 1: the tail shader shapes it. */
+function tailGeometry() {
+  if (tailGeo) return tailGeo;
+  const rings = 72, around = 28;
+  const pos: number[] = [];
+  const index: number[] = [];
+  for (let i = 0; i <= rings; i++) {
+    const s = Math.pow(i / rings, 1.7);
+    for (let j = 0; j <= around; j++) {
+      const a = (j / around) * Math.PI * 2;
+      pos.push(s, Math.cos(a), Math.sin(a));
+    }
+  }
+  for (let i = 0; i < rings; i++)
+    for (let j = 0; j < around; j++) {
+      const a = i * (around + 1) + j, b = a + around + 1;
+      index.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  tailGeo = new THREE.BufferGeometry();
+  tailGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  tailGeo.setIndex(index);
+  return tailGeo;
+}
+
+/** streaks: how stripy (gas) vs smooth (dust); soft: how much the glow keeps to the middle of the tube */
+function makeTail(color: THREE.Color, streaks: number, soft: number) {
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: TAIL_VERT,
+    fragmentShader: TAIL_FRAG,
+    uniforms: {
+      uLength: { value: 100 },
+      uR0: { value: 1 },
+      uR1: { value: 10 },
+      uBend: { value: 0 },
+      uColor: { value: color },
+      uBright: { value: 1 },
+      uStreaks: { value: streaks },
+      uSoft: { value: soft },
+      uTime: { value: 0 },
+    },
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+  });
+  const mesh = new THREE.Mesh(tailGeometry(), mat);
+  mesh.frustumCulled = false; // the shader stretches it far beyond its 0..1 box
+  return { mesh, mat };
+}
+
+function makeComet(info: BodyInfo, scene: THREE.Scene): Body {
+  const b = makePlanet(info, scene);
+  const ion = makeTail(new THREE.Color(0.42, 0.66, 1.0), 1, 1.6);
+  const dust = makeTail(new THREE.Color(1.0, 0.88, 0.7), 0.35, 3);
+  b.tilt.add(dust.mesh, ion.mesh);
+  const glow = (stops: [number, string][]) =>
+    new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(stops), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
+  const core = glow([[0, 'rgba(255,255,255,1)'], [0.12, 'rgba(225,245,255,0.8)'], [0.4, 'rgba(150,215,255,0.22)'], [1, 'rgba(120,200,255,0)']]);
+  const haze = glow([[0, 'rgba(190,240,235,0.55)'], [0.3, 'rgba(140,210,230,0.16)'], [1, 'rgba(100,180,220,0)']]);
+  // close up a thin veil of glowing gas over the nucleus (drawn over it: the gas surrounds it)
+  const veil = glow([[0, 'rgba(220,245,255,0.5)'], [0.35, 'rgba(180,230,255,0.25)'], [1, 'rgba(150,215,255,0)']]);
+  veil.material.depthTest = false;
+  veil.renderOrder = 2;
+  veil.scale.setScalar(info.radius * 3.4);
+  b.anchor.add(haze, core, veil);
+  b.comet = { ion: ion.mat, dust: dust.mat, core, haze, veil };
+  b.viewRadius = info.radius * 7; // frame the glowing head and the start of the tails, not just the nucleus
+  return b;
+}
+
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+/** Where on its loop a comet is at this moment of its lap (0..2π), relative to the Sun. */
+function cometPosition(c: CometOrbit, lap: number, out: THREE.Vector3) {
+  const a = (c.perihelion + c.aphelion) / 2;
+  const e = (c.aphelion - c.perihelion) / (c.aphelion + c.perihelion);
+  // Kepler's equation with a softened pace: faster near the Sun, slower far away
+  let E = lap;
+  for (let i = 0; i < 6; i++) E -= (E - c.rush * Math.sin(E) - lap) / (1 - c.rush * Math.cos(E));
+  out.set(a * (Math.cos(E) - e), 0, -a * Math.sqrt(1 - e * e) * Math.sin(E));
+  return out.applyAxisAngle(X_AXIS, c.inclination * DEG).applyAxisAngle(Y_AXIS, c.turn * DEG);
+}
+
+const cometAhead = new THREE.Vector3();
+const cometAway = new THREE.Vector3();
+const cometUp = new THREE.Vector3();
+const cometSide = new THREE.Vector3();
+/** Turn the comet's frame away from the Sun and size its head and tails for its distance. */
+function updateComet(b: Body, time: number, viewer?: THREE.Vector3) {
+  const c = b.info.comet!;
+  const parts = b.comet!;
+  const r = b.anchor.position.length();
+  cometPosition(c, b.orbitAngle + 0.002, cometAhead).sub(b.anchor.position); // direction of travel
+  cometAway.copy(b.anchor.position).normalize();
+  cometUp.crossVectors(cometAway, cometAhead).normalize();
+  if (cometUp.y < 0) cometUp.negate();
+  cometSide.crossVectors(cometAway, cometUp);
+  b.tilt.quaternion.setFromRotationMatrix(basis.makeBasis(cometAway, cometUp, cometSide));
+  // 1 at the nearest point to the Sun, fading far away (a comet wakes up only near the Sun)
+  const act = THREE.MathUtils.clamp(Math.pow(c.perihelion / r, 1.4), 0.05, 1);
+  const len = 25 + 270 * act;
+  // from afar the thin glow would melt into a speck: there the head and tails get bolder
+  const far = viewer ? THREE.MathUtils.smoothstep(viewer.distanceTo(b.anchor.position), 80, 500) : 0;
+  const bold = 1 + 2.2 * far, wide = 1 + 1.2 * far;
+  const behind = cometAhead.dot(cometSide) > 0 ? -1 : 1; // the dust lags behind the head
+  const ion = parts.ion.uniforms, dust = parts.dust.uniforms;
+  ion.uLength.value = len;
+  ion.uR0.value = b.info.radius * 0.7;
+  ion.uR1.value = (2 + len * 0.035) * wide;
+  ion.uBright.value = (0.18 + 0.55 * act) * bold;
+  dust.uLength.value = len * 0.62;
+  dust.uR0.value = b.info.radius * 1.1;
+  dust.uR1.value = (3 + len * 0.15) * wide;
+  dust.uBend.value = 0.3 * behind;
+  dust.uBright.value = (0.08 + 0.3 * act) * (1 + 1.2 * far);
+  ion.uTime.value = dust.uTime.value = time;
+  const R = b.info.radius;
+  parts.core.scale.setScalar(R * (4 + 4 * act));
+  parts.haze.scale.setScalar(R * (10 + 22 * act) * (1 + 1.5 * far));
+  parts.haze.material.opacity = 0.35 + 0.65 * act;
+  parts.veil.material.opacity = (0.4 + 0.6 * act) * (1 - far); // only close up: from afar it would shine through planets
+}
+
 export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
   lowDetail = lowEnd;
   sphereGeo = lowEnd ? new THREE.SphereGeometry(1, 72, 48) : new THREE.SphereGeometry(1, 160, 120);
   return BODIES.map((info) =>
     info.id === 'sun' ? makeSun(info, scene)
       : info.station ? makeStationBody(info, scene)
+      : info.comet ? makeComet(info, scene)
       : makePlanet(info, scene));
 }
 
@@ -655,7 +848,9 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const i = b.info;
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
-    b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position, b.orbitR ?? i.orbit)).add(origin);
+    if (i.comet) cometPosition(i.comet, b.orbitAngle, b.anchor.position);
+    else b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position, b.orbitR ?? i.orbit)).add(origin);
+    if (b.comet) updateComet(b, time, viewer);
     if (b.station) flyNoseFirst(b, parent!, viewer);
     // moons (the Moon, Charon) keep one face towards their planet
     else b.mesh.rotation.y = parent ? b.orbitAngle + Math.PI : b.spinAngle;

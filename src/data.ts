@@ -3,7 +3,8 @@ import type { SurfaceKind } from './surfaces.ts';
 export type BodyId =
   | 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
   | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon' | 'iss'
-  | 'phobos' | 'deimos' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'enceladus' | 'titan' | 'triton';
+  | 'phobos' | 'deimos' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'enceladus' | 'titan' | 'triton'
+  | 'comet';
 
 export interface Atmosphere {
   color: [number, number, number];
@@ -47,7 +48,31 @@ export interface BodyPhysics {
    * giants' moon systems are wider than the gaps between the (squeezed) orbits.
    */
   moonsWhenNear?: boolean;
+  /**
+   * A comet: a long, stretched loop around the Sun instead of a circle (orbit and inclination are
+   * unused, startAngle is where on the loop it starts), with tails that grow near the Sun. Drawn by
+   * bodies.ts (makeComet).
+   */
+  comet?: CometOrbit;
 }
+
+export interface CometOrbit {
+  /** nearest and farthest distance from the Sun, scene units */
+  perihelion: number;
+  aphelion: number;
+  /** tilt of the loop out of the planets' plane, degrees */
+  inclination: number;
+  /** direction of the nearest point, degrees around the Sun (0 = screen right in the overview, -90 = towards the viewer) */
+  turn: number;
+  /**
+   * How much faster it moves near the Sun: 0 = even pace along the loop, a real comet = the loop's
+   * stretch (eccentricity). Kept lower than real so it doesn't spend almost all its time far away.
+   */
+  rush: number;
+}
+
+/** Bodies without a ball to compare with Earth or to cut open: the station and the comet. */
+export const isBall = (b: BodyPhysics) => !b.station && !b.comet;
 
 // Earth's year ≈ 150 s on screen; other orbits follow the real period ratios.
 const YEAR = 150;
@@ -368,6 +393,20 @@ export const PHYSICS: BodyPhysics[] = [
     startAngle: 2.0,
     surface: 'charon',
     parent: 'pluto',
+  },
+  {
+    id: 'comet',
+    icon: 'radial-gradient(circle at 35% 50%, #ffffff 0%, #bfe4ff 22%, #4a7fc0 55%, #0d1a33 100%)',
+    diameterKm: 11, // a typical big nucleus, like Halley's (15 × 8 km)
+    radius: 1.6, // the nucleus, far bigger than true scale; the glowing head and tails are much bigger
+    orbit: 0, // no circle: see comet
+    orbitSeconds: 300, // one loop in about five minutes
+    spinSeconds: 21,
+    tilt: 35,
+    startAngle: -1.2, // on its way in when the app opens, so it soon sweeps past the Sun
+    surface: 'comet',
+    shape: [1, 0.66, 0.58],
+    comet: { perihelion: 98, aphelion: 820, inclination: 24, turn: -25, rush: 0.55 },
   },
 ];
 

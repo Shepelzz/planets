@@ -180,3 +180,9 @@ services:
       - type: rewrite
         source: /charon/
         destination: /charon.html
+      - type: rewrite
+        source: /comet
+        destination: /comet.html
+      - type: rewrite
+        source: /comet/
+        destination: /comet.html

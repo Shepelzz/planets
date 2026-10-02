@@ -45,6 +45,42 @@ vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
   return srgbToLinear(texture2D(uMap, uv).rgb);
 }`;
 
+/** The comet's icon: a glowing head with its tail streaming to the upper right. */
+function cometIcon(size: number) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  const hx = size * 0.34, hy = size * 0.66; // the head
+  const angle = -Math.PI / 4;
+  g.save();
+  g.translate(hx, hy);
+  g.rotate(angle);
+  // the tails: a wide warm dust fan and a narrow blue gas streak, fading out
+  const tail = (len: number, w: number, rgb: string, alpha: number) => {
+    const grad = g.createLinearGradient(0, 0, len, 0);
+    grad.addColorStop(0, `rgba(${rgb},${alpha})`);
+    grad.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = grad;
+    g.beginPath();
+    g.moveTo(0, -size * 0.05);
+    g.quadraticCurveTo(len * 0.5, -w * 0.6, len, -w);
+    g.lineTo(len, w * 0.4);
+    g.quadraticCurveTo(len * 0.5, w * 0.3, 0, size * 0.05);
+    g.fill();
+  };
+  tail(size * 0.72, size * 0.2, '255,236,200', 0.75);
+  tail(size * 0.8, size * 0.07, '130,190,255', 0.9);
+  g.restore();
+  const head = g.createRadialGradient(hx, hy, 0, hx, hy, size * 0.2);
+  head.addColorStop(0, 'rgba(255,255,255,1)');
+  head.addColorStop(0.25, 'rgba(220,240,255,0.9)');
+  head.addColorStop(0.6, 'rgba(140,200,255,0.3)');
+  head.addColorStop(1, 'rgba(120,190,255,0)');
+  g.fillStyle = head;
+  g.fillRect(0, 0, size, size);
+  return c.toDataURL('image/png');
+}
+
 /**
  * Render a small lit picture of every body (spheres from their real maps, the ISS from its model) and return PNG data URLs for the UI icons. Call once the textures have loaded.
  */
@@ -69,7 +105,7 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
         vertexShader: THUMB_VERT,
         fragmentShader: THUMB_FRAG(kind === 'sun' ? SUN_SURFACE : SURFACES[kind]),
         uniforms: {
-          uMap: { value: loadTexture(TEXTURE_FILES[kind]) },
+          uMap: { value: loadTexture(TEXTURE_FILES[kind as Exclude<typeof kind, 'comet'>]) },
           uNight: { value: null },
           uClouds: { value: clouds },
           uHasClouds: { value: kind === 'earth' ? 1 : 0 },
@@ -95,6 +131,10 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
   const out: Record<string, string> = {};
   for (const id of ids) {
     const phys = PHYSICS.find((p) => p.id === id)!;
+    if (phys.comet) {
+      out[id] = cometIcon(size);
+      continue;
+    }
     const special = phys.station ? stationView : null;
     ball.visible = !special;
     if (special) {

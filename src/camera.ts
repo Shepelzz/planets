@@ -15,10 +15,16 @@ interface Flight {
   fromPos: THREE.Vector3;
   fromTarget: THREE.Vector3;
   to: Body | null;
-  offset: THREE.Vector3; // final camera position relative to target (in a station's own frame for a station)
+  offset: THREE.Vector3; // final camera position relative to target (in the body's own frame if it has one)
   overviewTarget?: THREE.Vector3;
   fromUp: THREE.Vector3;
 }
+
+/**
+ * Bodies the camera rides with in their own turning frame: a station (its planet stays below) and a
+ * comet (its tails, always pointing away from the Sun, stay sideways on screen).
+ */
+const ridesFrame = (b: Body | null) => !!(b?.station || b?.comet);
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -85,7 +91,7 @@ export class CameraDirector {
     if (!this.fillsWidth()) return this.fitDistance(b.viewRadius);
     // the ball itself; glow and atmosphere may spill over the edges, and so may the rings' tips
     // (fitting the whole rings left Saturn's ball small)
-    const r = b.info.rings ? b.viewRadius * 0.72 : b.info.radius;
+    const r = b.info.rings ? b.viewRadius * 0.72 : b.comet ? b.viewRadius : b.info.radius;
     const tanH = Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect;
     return r / Math.sin(Math.atan(tanH));
   }
@@ -127,6 +133,9 @@ export class CameraDirector {
   private focusOffset(b: Body) {
     // a station: from behind, a bit to the side and above, so the planet sweeps by below it
     if (b.station) return new THREE.Vector3(-0.55, -0.45, 0.7).normalize().multiplyScalar(this.arriveDistance(b));
+    // a comet (frame: x away from the Sun, y up): from the side and a little ahead, slightly above, so
+    // the head is lit and both tails stream across the screen
+    if (b.comet) return new THREE.Vector3(-0.3, 0.22, 1).normalize().multiplyScalar(this.arriveDistance(b));
     const pos = b.anchor.position;
     const toSun = pos.lengthSq() > 0 ? pos.clone().negate().normalize() : new THREE.Vector3(0, 0, 1);
     const up = new THREE.Vector3(0, 1, 0);
@@ -139,12 +148,14 @@ export class CameraDirector {
   }
 
   private worldOffset(f: Flight) {
-    return f.to?.station ? f.offset.clone().applyQuaternion(f.to.tilt.quaternion) : f.offset;
+    return f.to && ridesFrame(f.to) ? f.offset.clone().applyQuaternion(f.to.tilt.quaternion) : f.offset;
   }
 
-  /** Near a station "up" is away from its planet, so the planet always stays below; elsewhere it is world up. */
+  /** Near a station "up" is away from its planet, so the planet always stays below; at a comet its loop's up; elsewhere world up. */
   private upFor(b: Body | null) {
-    return b?.station ? new THREE.Vector3(0, 0, 1).applyQuaternion(b.tilt.quaternion) : WORLD_UP;
+    if (b?.station) return new THREE.Vector3(0, 0, 1).applyQuaternion(b.tilt.quaternion);
+    if (b?.comet) return new THREE.Vector3(0, 1, 0).applyQuaternion(b.tilt.quaternion);
+    return WORLD_UP;
   }
 
   private updateFlight(dt: number) {
@@ -180,6 +191,8 @@ export class CameraDirector {
       controls.minDistance = r * (focus.info.id === 'sun' ? 1.6 : 1.25);
       controls.maxDistance = focus.station
         ? this.fitDistance(focus.viewRadius) * 3
+        : focus.comet
+        ? this.fitDistance(focus.viewRadius) * 25 // back far enough to see the whole tail
         : Math.max(this.fitDistance(focus.viewRadius) * 6, r * 20);
     } else {
       controls.minDistance = 120; // stay outside the Sun
@@ -191,8 +204,9 @@ export class CameraDirector {
   private followFocus() {
     const { focus, camera, controls } = this;
     if (!focus || this.flight) return;
-    if (focus.station) {
-      // ride in the station's own frame: as it circles the planet the view turns with it
+    if (ridesFrame(focus)) {
+      // ride in the body's own frame: as a station circles its planet (or a comet swings round the
+      // Sun) the view turns with it
       const turn = focus.tilt.quaternion.clone().multiply(this.lastFocusQuat.invert());
       for (const p of [camera.position, controls.target]) p.sub(this.lastFocusPos).applyQuaternion(turn).add(focus.anchor.position);
       camera.up.copy(this.upFor(focus));

@@ -52,7 +52,7 @@ function statMoons(b: BodyInfo): string {
 }
 
 function sizeCompare(info: BodyInfo): string {
-  if (!NARRATION[info.id].compare) return ''; // a station: no ball to compare
+  if (!NARRATION[info.id].compare) return ''; // the station, the comet: no ball to compare
   const ratio = info.diameterKm / EARTH_DIAMETER;
   const max = 64;
   const big = Math.max(ratio, 1);
@@ -106,12 +106,12 @@ export function createUI(h: Handlers) {
   btnOverview.innerHTML = ICONS.system;
   btnLabels.innerHTML = ICONS.labels;
 
-  // The dock holds only the Sun, the planets and the dwarf planet (in groups with dividers); moons
+  // The dock holds only the Sun, the planets, the dwarf planet and the comet (in groups with dividers); moons
   // live in a row that appears above it for the chosen planet, so the dock never grows with them.
   const chips = new Map<BodyId, HTMLButtonElement>();
   let prevGroup = '';
   for (const b of BODIES.filter((x) => !x.parent)) {
-    const group = b.id === 'sun' ? 'star' : b.dwarf ? 'dwarf' : 'planet';
+    const group = b.id === 'sun' ? 'star' : b.dwarf ? 'dwarf' : b.comet ? 'comet' : 'planet';
     if (prevGroup && group !== prevGroup) {
       const sep = document.createElement('span');
       sep.className = 'dock-sep';

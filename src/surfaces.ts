@@ -5,7 +5,7 @@
 export type SurfaceKind =
   | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
   | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon'
-  | 'io' | 'europa' | 'ganymede' | 'callisto' | 'titan' | 'enceladus' | 'triton' | 'phobos' | 'deimos';
+  | 'io' | 'europa' | 'ganymede' | 'callisto' | 'titan' | 'enceladus' | 'triton' | 'phobos' | 'deimos' | 'comet';
 
 const TEXTURED = /* glsl */ `
 uniform sampler2D uMap;
@@ -121,6 +121,18 @@ const TRITON = moonSurface(/* glsl */ `
 const MARS_MOON = moonSurface(/* glsl */ `
   c = srgbToLinear(raw * vec3(0.9, 0.8, 0.7));`);
 
+// A comet's nucleus: dust darker than coal, a few bright patches of bare ice (made up: no map)
+const COMET = /* glsl */ `
+vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
+  spec = 0.0; night = vec3(0.0);
+  float n = fbm(p * 4.0, 5);
+  float fine = fbm(p * 19.0 + 7.0, 3);
+  h = n * 0.7 + fine * 0.3;
+  vec3 c = mix(vec3(0.07, 0.062, 0.055), vec3(0.2, 0.18, 0.16), smoothstep(-0.5, 0.6, n + fine * 0.3));
+  float ice = smoothstep(0.42, 0.6, fbm(p * 7.0 + 3.0, 3));
+  return mix(c, vec3(0.62, 0.7, 0.78), ice * 0.7);
+}`;
+
 export const SURFACES: Record<SurfaceKind, string> = {
   mercury: TEXTURED,
   venus: TEXTURED,
@@ -142,10 +154,11 @@ export const SURFACES: Record<SurfaceKind, string> = {
   triton: TRITON,
   phobos: MARS_MOON,
   deimos: MARS_MOON,
+  comet: COMET,
 };
 
 /** Texture files in public/textures (Solar System Scope, CC BY 4.0, based on NASA data). */
-export const TEXTURE_FILES: Record<SurfaceKind | 'sun', string> = {
+export const TEXTURE_FILES: Record<Exclude<SurfaceKind, 'comet'> | 'sun', string> = {
   sun: 'sun.jpg',
   mercury: 'mercury.jpg',
   venus: 'venus.jpg',
@@ -184,4 +197,5 @@ export const BUMP: Partial<Record<SurfaceKind, number>> = {
   enceladus: 0.008,
   phobos: 0.03,
   deimos: 0.025,
+  comet: 0.04,
 };

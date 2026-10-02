@@ -23,7 +23,7 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
     systemReach.set(p, Math.max(systemReach.get(p) ?? 0, b.info.orbit + b.info.radius));
   }
 
-  const planets = bodies.filter((b) => !b.info.parent && b !== sun);
+  const planets = bodies.filter((b) => !b.info.parent && b !== sun && !b.info.comet);
   /** How far a planet's always-shown things reach: rings, or moons like the Moon and Charon. */
   const extent = (b: Body) => {
     let e = b.viewRadius;
@@ -43,7 +43,7 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
   function spread(focus: Body | null, dt: number) {
     const visiting = visitedBy(focus);
     const target = new Map<Body, number>(planets.map((p) => [p, p.info.orbit]));
-    if (visiting && visiting !== sun) {
+    if (visiting && planets.includes(visiting)) {
       const r = visiting.info.orbit;
       const i = sorted.indexOf(visiting);
       const prev = sorted[i - 1];
