@@ -702,6 +702,8 @@ function cometPosition(c: CometOrbit, lap: number, out: THREE.Vector3) {
   return out.applyAxisAngle(X_AXIS, c.inclination * DEG).applyAxisAngle(Y_AXIS, c.turn * DEG);
 }
 
+/** Closer to the Sun than this (scene units) a comet's head and tails are at full size. */
+const ACTIVE_FROM = 100;
 const cometAhead = new THREE.Vector3();
 const cometAway = new THREE.Vector3();
 const cometUp = new THREE.Vector3();
@@ -717,12 +719,12 @@ function updateComet(b: Body, time: number, viewer?: THREE.Vector3) {
   if (cometUp.y < 0) cometUp.negate();
   cometSide.crossVectors(cometAway, cometUp);
   b.tilt.quaternion.setFromRotationMatrix(basis.makeBasis(cometAway, cometUp, cometSide));
-  // 1 at the nearest point to the Sun, fading far away (a comet wakes up only near the Sun)
-  const act = THREE.MathUtils.clamp(Math.pow(c.perihelion / r, 1.4), 0.05, 1);
+  // grows near the Sun, fades far away (a comet wakes up only near the Sun)
+  const act = THREE.MathUtils.clamp(Math.pow(ACTIVE_FROM / r, 1.4), 0.05, 1);
   const len = 25 + 270 * act;
   // from afar the thin glow would melt into a speck: there the head and tails get bolder
   const far = viewer ? THREE.MathUtils.smoothstep(viewer.distanceTo(b.anchor.position), 80, 500) : 0;
-  const bold = 1 + 2.2 * far, wide = 1 + 1.2 * far;
+  const bold = 1 + 0.7 * far, wide = 1 + 0.3 * far;
   const behind = cometAhead.dot(cometSide) > 0 ? -1 : 1; // the dust lags behind the head
   const ion = parts.ion.uniforms, dust = parts.dust.uniforms;
   ion.uLength.value = len;
@@ -733,11 +735,11 @@ function updateComet(b: Body, time: number, viewer?: THREE.Vector3) {
   dust.uR0.value = b.info.radius * 1.1;
   dust.uR1.value = (3 + len * 0.15) * wide;
   dust.uBend.value = 0.3 * behind;
-  dust.uBright.value = (0.08 + 0.3 * act) * (1 + 1.2 * far);
+  dust.uBright.value = (0.08 + 0.3 * act) * bold;
   ion.uTime.value = dust.uTime.value = time;
   const R = b.info.radius;
   parts.core.scale.setScalar(R * (4 + 4 * act));
-  parts.haze.scale.setScalar(R * (10 + 22 * act) * (1 + 1.5 * far));
+  parts.haze.scale.setScalar(R * (10 + 22 * act) * (1 + 0.8 * far));
   parts.haze.material.opacity = 0.35 + 0.65 * act;
   parts.veil.material.opacity = (0.4 + 0.6 * act) * (1 - far); // only close up: from afar it would shine through planets
 }

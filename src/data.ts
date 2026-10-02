@@ -406,7 +406,7 @@ export const PHYSICS: BodyPhysics[] = [
     startAngle: -1.2, // on its way in when the app opens, so it soon sweeps past the Sun
     surface: 'comet',
     shape: [1, 0.66, 0.58],
-    comet: { perihelion: 98, aphelion: 820, inclination: 24, turn: -25, rush: 0.55 },
+    comet: { perihelion: 195, aphelion: 820, inclination: 24, turn: -25, rush: 0.55 },
   },
 ];
 
