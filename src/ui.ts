@@ -1,10 +1,13 @@
-import { BODIES, INSIDE_STAT, NARRATION, STRUCTURE, UI, type BodyInfo } from './content';
-import { EARTH_DIAMETER, type BodyId } from './data';
+import { BODIES, INSIDE_STAT, NARRATION, SECRET, STRUCTURE, UI, type BodyInfo } from './content';
+import { EARTH_DIAMETER, realmOf, type BodyId, type Realm } from './data';
 import { preload, say, setSpeechEnabled, speechSupported } from './speech';
 
 interface Handlers {
   onSelect: (id: BodyId) => void;
+  /** the whole system of the realm we are in */
   onOverview: () => void;
+  /** our Solar System, from wherever we are */
+  onHome: () => void;
   onTogglePlay: () => void;
   /** Open (or close, if open) the cut-away of the current body; onEnd when its story ends. Returns true if it opened. */
   onStructure: (onEnd: () => void) => boolean;
@@ -106,27 +109,46 @@ export function createUI(h: Handlers) {
   btnOverview.innerHTML = ICONS.system;
   btnLabels.innerHTML = ICONS.labels;
 
-  // The dock holds only the Sun, the planets, the dwarf planet and the comet (in groups with dividers); moons
-  // live in a row that appears above it for the chosen planet, so the dock never grows with them.
+  // The dock holds the stars, planets, dwarf planet, comet (or ship) of the realm we are in, in groups
+  // with dividers; moons live in a row that appears above it for the chosen planet, so the dock never
+  // grows with them. In the hidden «Passengers» mode the right end has doors to the other realms.
   const chips = new Map<BodyId, HTMLButtonElement>();
-  let prevGroup = '';
-  for (const b of BODIES.filter((x) => !x.parent)) {
-    const group = b.id === 'sun' ? 'star' : b.dwarf ? 'dwarf' : b.comet ? 'comet' : 'planet';
-    if (prevGroup && group !== prevGroup) {
-      const sep = document.createElement('span');
-      sep.className = 'dock-sep';
-      dock.appendChild(sep);
+  /** the doors at the right end of the dock: where each realm leads */
+  const DOORS: Record<Realm, BodyId[]> = { sol: ['avalon', 'homestead'], homestead: ['avalon', 'earth'], voyage: ['earth', 'homestead'] };
+  let dockRealm: Realm | null = null;
+  function renderDock(realm: Realm) {
+    if (realm === dockRealm) return;
+    dockRealm = realm;
+    dock.innerHTML = '';
+    chips.clear();
+    const here = BODIES.filter((x) => !x.parent && realmOf(x) === realm);
+    const doors = SECRET ? DOORS[realm].map((id) => BODIES.find((b) => b.id === id)!) : [];
+    let prevGroup = '';
+    for (const b of [...here, ...doors]) {
+      const door = !here.includes(b);
+      const group = door ? 'door' : b.star ? 'star' : b.dwarf ? 'dwarf' : b.comet ? 'comet' : b.ship ? 'ship' : 'planet';
+      if (prevGroup && group !== prevGroup) {
+        const sep = document.createElement('span');
+        sep.className = 'dock-sep';
+        dock.appendChild(sep);
+      }
+      prevGroup = group;
+      const chip = document.createElement('button');
+      chip.className = 'chip' + (b.rings ? ' ringed' : '') + (b.star ? ' star' : '') + (door ? ' door' : '');
+      const moonCount = naturalMoonsOf(b.id).length;
+      const badge = moonCount && !door ? `<span class="chip-badge" aria-label="супутників: ${moonCount}">${moonCount}</span>` : '';
+      chip.innerHTML = `<span class="chip-ball">${badge}</span><span class="chip-name">${b.name}</span>`;
+      chip.addEventListener('click', () => h.onSelect(b.id));
+      paintChip(chip, b);
+      dock.appendChild(chip);
+      chips.set(b.id, chip);
     }
-    prevGroup = group;
-    const chip = document.createElement('button');
-    chip.className = 'chip' + (b.rings ? ' ringed' : '') + (b.id === 'sun' ? ' star' : '');
-    const moonCount = naturalMoonsOf(b.id).length;
-    const badge = moonCount ? `<span class="chip-badge" aria-label="супутників: ${moonCount}">${moonCount}</span>` : '';
-    chip.innerHTML = `<span class="chip-ball">${badge}</span><span class="chip-name">${b.name}</span>`;
-    chip.addEventListener('click', () => h.onSelect(b.id));
-    paintChip(chip, b);
-    dock.appendChild(chip);
-    chips.set(b.id, chip);
+    markSelected();
+  }
+  function markSelected() {
+    const dockId = current ? current.parent ?? current.id : null; // a moon lights up its planet
+    for (const [cid, chip] of chips) chip.classList.toggle('selected', cid === dockId);
+    return dockId;
   }
 
   // moons of the chosen planet (or of the chosen moon's planet), above the dock
@@ -352,17 +374,21 @@ export function createUI(h: Handlers) {
 
   btnMotion.addEventListener('click', h.onTogglePlay);
   btnOverview.addEventListener('click', h.onOverview);
-  // the title at the top left is also the way back to the whole system (a real link to /solar-system)
+  // the title at the top left is the way home: our whole Solar System (a real link to /solar-system)
   document.querySelector('.brand')!.addEventListener('click', (e) => {
     const m = e as MouseEvent;
     if (m.metaKey || m.ctrlKey || m.shiftKey) return; // open in a new tab as usual
     e.preventDefault();
-    h.onOverview();
+    h.onHome();
   });
   btnLabels.addEventListener('click', toggleLabels);
   btnSound.addEventListener('click', toggleSound);
 
+  renderDock('sol');
+
   return {
+    /** We are now in this realm: its own bodies in the dock, doors to the others at the end. */
+    setRealm: renderDock,
     setThumbnails(t: Record<string, string>) {
       thumbs = t;
       for (const [cid, chip] of chips) paintChip(chip, BODIES.find((b) => b.id === cid)!);
@@ -381,14 +407,13 @@ export function createUI(h: Handlers) {
         infoWanted = card === 'later';
         infoPending = card === 'later';
       }
-      const dockId = next ? next.parent ?? next.id : null; // a moon lights up its planet
-      for (const [cid, chip] of chips) chip.classList.toggle('selected', cid === dockId);
-      if (dockId) {
-        chips.get(dockId)!.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-        hint.classList.add('gone');
-      }
       if (next !== current) factIndex = 0;
       current = next;
+      const dockId = markSelected();
+      if (dockId) {
+        chips.get(dockId)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        hint.classList.add('gone');
+      }
       document.body.classList.toggle('has-focus', !!current);
       renderMoons();
       renderInfo();

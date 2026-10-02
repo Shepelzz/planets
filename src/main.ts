@@ -4,13 +4,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createBodies, createOrbitLines, loadRealStation, showDetail, updateBodies, type Body } from './bodies';
 import { CameraDirector } from './camera';
-import { NARRATION, UI } from './content';
+import { NARRATION, SECRET, UI } from './content';
 import { Cutaway } from './cutaway';
-import type { BodyId } from './data';
+import { realmOf, type BodyId, type Realm } from './data';
 import { createDevTools } from './devTools';
 import { createLabels, listenForTaps, pickBody } from './labels';
 import { keepPointersOnCanvas } from './pointerFix';
-import { onAddressChange, pathSegment, showAddress } from './routes';
+import { HOMESTEAD_PATH, onAddressChange, pathSegment, showAddress } from './routes';
 import { createSky } from './sky';
 import { preload, say } from './speech';
 import { createSystems } from './systems';
@@ -67,7 +67,7 @@ scene.add(sky.group);
 const bodies = createBodies(scene, lowEnd);
 const lines = createOrbitLines(scene, bodies);
 const byId = new Map(bodies.map((b) => [b.info.id, b]));
-const sunBody = byId.get('sun')!;
+const stars = bodies.filter((b) => b.info.star);
 const systems = createSystems(bodies, lines);
 
 // textbook cut-away of the focused body ("З чого складається" block)
@@ -103,13 +103,43 @@ window.addEventListener('resize', resize);
 resize();
 
 // ---------- going somewhere ----------
+// Realms (data.ts): our Solar System, and in the hidden «Passengers» mode the Homestead II system and
+// deep space with the ship. Only the realm we are in is shown; going to another one is a hyperjump.
+let realm: Realm = 'sol';
+const warp = document.getElementById('warp')!;
+let jumping = false;
+const JUMP_IN = 650; // ms: the flash builds up, then the new realm appears behind it
+
+/** Jump to another realm (instant: no flash, for opening a link), then carry on with `then`. */
+function hyperjump(to: Realm, then: () => void, instant = false) {
+  if (jumping) return;
+  const arrive = () => {
+    realm = to;
+    cutaway.close();
+    director.jumpCut();
+    ui.setRealm(to);
+    then();
+  };
+  if (instant) return arrive();
+  jumping = true;
+  warp.classList.add('on');
+  window.setTimeout(() => {
+    arrive();
+    warp.classList.remove('on');
+    jumping = false;
+  }, JUMP_IN);
+}
+
 /**
- * Fly to a body (null: the whole system): address, card, narration, maps, then the camera.
+ * Fly to a body (null: the whole system of the realm we are in): address, card, narration, maps, then
+ * the camera; a body in another realm first takes a hyperjump there.
  * card: 'later' — its card slides in when we arrive (chosen from the dock, a link…); 'hidden' — no
  * card (the body was tapped in the scene: tapping it again opens the card).
  */
 function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 'none' = 'push', card: 'later' | 'hidden' = 'later') {
-  showAddress(b ? { id: b.info.id, name: b.info.name } : null, address);
+  if (b && realmOf(b.info) !== realm) return hyperjump(realmOf(b.info), () => flyTo(b, duration, address, card), address === 'replace');
+  if (!b && realm === 'voyage') b = byId.get('avalon')!; // deep space has no "system": just the ship
+  showAddress(b ? { id: b.info.id, name: b.info.name } : null, address, realm);
   cutaway.close();
   if (b?.station) loadRealStation(b); // fetch the detailed model while we fly
   // the 4K map of where we are going (for the ISS: Earth below it)
@@ -118,9 +148,20 @@ function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 
   ui.setSelected(b ? b.info.id : null, card); // before the camera: the panel's place changes the framing
   director.flyTo(b, duration);
 }
+/** The whole system of a realm, jumping there first if needed. */
+function overview(of: Realm, address: 'push' | 'replace' | 'none' = 'push') {
+  if (of !== realm) hyperjump(of, () => flyTo(null, undefined, address), address === 'replace');
+  else flyTo(null, undefined, address);
+}
 director.onArrive = () => ui.revealInfo();
-const bodyFromPath = () => byId.get(pathSegment() as BodyId) ?? null;
-onAddressChange(() => flyTo(bodyFromPath(), undefined, 'none'));
+/** What the address shows: a body, or the whole system of a realm. */
+function goToAddress(address: 'replace' | 'none') {
+  const seg = pathSegment();
+  const b = byId.get(seg as BodyId);
+  if (b) flyTo(b, undefined, address);
+  else overview(SECRET && seg === HOMESTEAD_PATH ? 'homestead' : 'sol', address);
+}
+onAddressChange(() => goToAddress('none'));
 
 // ---------- taps and labels ----------
 listenForTaps(canvas, (x, y) => {
@@ -146,6 +187,7 @@ const ui = createUI({
     }
   },
   onOverview: () => flyTo(null),
+  onHome: () => overview('sol'),
   onTogglePlay: () => {
     playing = !playing;
     ui.setPlaying(playing);
@@ -172,10 +214,11 @@ window.addEventListener('keydown', (e) => {
     ui.setPlaying(playing);
   }
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-    const i = director.focus ? bodies.indexOf(director.focus) : -1;
-    const n = bodies.length;
+    const here = bodies.filter((b) => realmOf(b.info) === realm);
+    const i = director.focus ? here.indexOf(director.focus) : -1;
+    const n = here.length;
     const next = e.key === 'ArrowRight' ? (i + 1) % n : (i - 1 + n) % n;
-    flyTo(bodies[next < 0 ? n - 1 : next]);
+    flyTo(here[next < 0 ? n - 1 : next]);
   }
   if (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш') ui.toggleInfo();
   if (e.key === 'l' || e.key === 'L' || e.key === 'д' || e.key === 'Д') ui.toggleLabels();
@@ -186,9 +229,8 @@ window.addEventListener('keydown', (e) => {
 updateBodies(bodies, 0, 0, lines);
 {
   // open at the body in the address (a shared link), or the whole system
-  const start = bodyFromPath();
-  flyTo(start, undefined, 'replace');
-  if (!start) ui.setSelected(null);
+  goToAddress('replace');
+  if (!director.focus) ui.setSelected(null);
 }
 
 // dev tools (link-preview cards, icon): only in `npm run dev`, left out of the build
@@ -234,13 +276,15 @@ function frame(now: number) {
   if (playing) simTime += dt;
   systems.spread(director.focus, rawDt > 0.5 ? 0.5 : rawDt);
   updateBodies(bodies, playing ? dt : 0, simTime, lines, camera.position);
-  systems.visibility(director.focus, Math.min(rawDt, 0.1));
+  systems.visibility(director.focus, Math.min(rawDt, 0.1), realm);
   director.update(rawDt);
   cutaway.update(Math.min(rawDt, 0.1));
   sky.group.position.copy(camera.position);
-  // the wide halo looks like fog up close, so fade it in with distance
-  const halo = sunBody.anchor.userData.halo as THREE.Sprite;
-  halo.material.opacity = THREE.MathUtils.smoothstep(camera.position.length(), 150, 450);
+  // a star's wide halo looks like fog up close, so fade it in with distance
+  for (const s of stars) {
+    const k = s.info.radius / 43; // the Sun's size: the others scale with theirs
+    (s.anchor.userData.halo as THREE.Sprite).material.opacity = THREE.MathUtils.smoothstep(camera.position.distanceTo(s.anchor.position), 150 * k, 450 * k);
+  }
   labels.update(director.focus, director.flying);
   dev?.beforeRender();
   renderer.render(scene, camera);

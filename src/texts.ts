@@ -83,14 +83,17 @@ function obj(v: unknown, where: string): Obj {
 export function buildContent(raw: unknown): Content {
   const root = obj(raw, 'файл');
   const bodies = obj(root.bodies, 'bodies');
+  // the hidden «Passengers» mode lives in its own section: no pages, link cards or sitemap entries
+  const secret = obj(root.secret, 'secret');
   const BODIES: BodyInfo[] = [];
   const NARRATION = {} as Record<BodyId, Narration>;
   const STRUCTURE: Partial<Record<BodyId, Structure>> = {};
 
   for (const phys of PHYSICS) {
     const id = phys.id;
-    const where = `bodies.${id}`;
-    const t = obj(bodies[id], where);
+    const section = phys.realm ? 'secret' : 'bodies';
+    const where = `${section}.${id}`;
+    const t = obj((phys.realm ? secret : bodies)[id], where);
 
     const statsRaw = obj(t.stats, `${where}.stats`);
     const stats: Stat[] = [];
@@ -128,10 +131,11 @@ export function buildContent(raw: unknown): Content {
       stats,
       facts: facts as string[],
     });
-    if (!isBall(phys) && t.compare) fail(`${where}.compare`, 'для станції й комети порівняння із Землею не показується');
+    if (!isBall(phys) && t.compare) fail(`${where}.compare`, 'для станції, комети й корабля порівняння із Землею не показується');
     NARRATION[id] = { intro: str(t, 'intro', where), stats: say, compare: isBall(phys) ? str(t, 'compare', where) : undefined };
   }
-  for (const id of Object.keys(bodies)) if (!PHYSICS.some((p) => p.id === id)) fail(`bodies.${id}`, 'такого тіла в коді немає (data.ts)');
+  for (const id of Object.keys(bodies)) if (!PHYSICS.some((p) => p.id === id && !p.realm)) fail(`bodies.${id}`, 'такого тіла в коді немає (data.ts) або воно в розділі secret');
+  for (const id of Object.keys(secret)) if (!PHYSICS.some((p) => p.id === id && p.realm)) fail(`secret.${id}`, 'такого прихованого тіла в коді немає (data.ts)');
 
   const uiRaw = obj(root.ui, 'ui');
   const UI = {} as UiTexts;

@@ -147,8 +147,8 @@ button {
 
 .chip {
   flex: 0 0 auto;
-  width: 76px;
-  padding: 8px 2px 7px;
+  min-width: 76px; /* a long name (Сонце Обителі) makes its chip wider instead of running into the next */
+  padding: 8px 6px 7px;
   border: none;
   border-radius: 20px;
   background: transparent;
@@ -430,7 +430,7 @@ h1.talk.speaking, .fact-text.talk.speaking { box-shadow: none; color: var(--acce
   .info-body { display: block; }
   /* one column: the side-by-side margins from the tablet layout no longer apply, use equal gaps */
   .info-body .compare, .info-body .fact { margin-top: 12px; }
-  .chip { width: 66px; }
+  .chip { min-width: 66px; padding-left: 4px; padding-right: 4px; }
   .chip-ball { width: 38px; height: 38px; }
   #hint { font-size: 14px; white-space: normal; text-align: center; width: max-content; max-width: calc(100vw - 32px); }
 }
@@ -576,3 +576,27 @@ button:focus-visible,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Hyperjump to another realm (hidden «Passengers» mode): a flash of light rushing out from the middle,
+   the new place appears behind it. Placeholder look; the real effect comes later. */
+#warp {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 1) 0%, rgba(200, 230, 255, 0.95) 25%, rgba(90, 150, 255, 0.85) 60%, rgba(10, 20, 60, 0.9) 100%);
+  transform: scale(0.6);
+  transition: opacity 0.9s ease-out, transform 0.9s ease-out;
+}
+#warp.on {
+  opacity: 1;
+  transform: scale(1.3);
+  transition: opacity 0.6s ease-in, transform 0.6s ease-in;
+}
+@media (prefers-reduced-motion: reduce) {
+  #warp, #warp.on { transform: none; }
+}
+/* doors to the other realms at the right end of the dock */
+.chip.door .chip-name { opacity: 0.8; font-style: italic; }

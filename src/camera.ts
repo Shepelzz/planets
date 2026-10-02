@@ -118,6 +118,19 @@ export class CameraDirector {
     controls.enabled = false;
   }
 
+  /** A hyperjump's cut: we are in another realm, looking at its whole system from afar, nothing in focus. */
+  jumpCut() {
+    const { camera, controls } = this;
+    this.flight = null;
+    this.focus = null;
+    camera.position.copy(OVERVIEW_OFFSET).multiplyScalar(1.6);
+    camera.up.copy(WORLD_UP);
+    controls.target.set(0, 0, 0);
+    camera.lookAt(controls.target);
+    controls.enabled = true;
+    this.configureLimits();
+  }
+
   /** Once per frame: the flight, riding along, the controls, framing and the near plane. */
   update(rawDt: number) {
     this.updateFlight(Math.min(rawDt, 0.5)); // flights run on wall-clock time even when frames stutter
@@ -142,7 +155,7 @@ export class CameraDirector {
     const side = new THREE.Vector3().crossVectors(up, toSun).normalize();
     // three-quarter lit view: sun behind-left of the camera, slightly from above
     const dir = toSun.multiplyScalar(0.62).addScaledVector(side, 0.78).addScaledVector(up, 0.2).normalize();
-    if (b.info.id === 'sun') dir.set(0.3, 0.25, 1).normalize();
+    if (b.info.star) dir.set(0.3, 0.25, 1).normalize();
     if (b.info.rings) dir.addScaledVector(up, 0.25).normalize();
     return dir.multiplyScalar(this.arriveDistance(b));
   }
@@ -188,7 +201,7 @@ export class CameraDirector {
     const { focus, controls } = this;
     if (focus) {
       const r = focus.info.radius;
-      controls.minDistance = r * (focus.info.id === 'sun' ? 1.6 : 1.25);
+      controls.minDistance = r * (focus.info.star ? 1.6 : 1.25);
       controls.maxDistance = focus.station
         ? this.fitDistance(focus.viewRadius) * 3
         : focus.comet

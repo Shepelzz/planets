@@ -45,6 +45,29 @@ vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
   return srgbToLinear(texture2D(uMap, uv).rgb);
 }`;
 
+/** The ship's icon (placeholder, like its model): a spine across with a shield, engine glow and three blades. */
+function shipIcon(size: number) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  g.translate(size / 2, size / 2);
+  g.rotate(-Math.PI / 7);
+  const u = size / 100;
+  g.fillStyle = '#9aa8bd';
+  g.fillRect(-40 * u, -2.5 * u, 80 * u, 5 * u); // spine
+  for (const x of [-12, 0, 12]) g.fillRect((x - 3) * u, -20 * u, 6 * u, 40 * u); // blades
+  g.fillStyle = '#4a566a';
+  g.beginPath();
+  g.arc(40 * u, 0, 13 * u, -Math.PI / 2, Math.PI / 2); // shield at the front
+  g.fill();
+  const glow = g.createRadialGradient(-42 * u, 0, 0, -42 * u, 0, 14 * u);
+  glow.addColorStop(0, 'rgba(200,235,255,1)');
+  glow.addColorStop(1, 'rgba(120,200,255,0)');
+  g.fillStyle = glow;
+  g.fillRect(-56 * u, -14 * u, 28 * u, 28 * u); // engines
+  return c.toDataURL('image/png');
+}
+
 /** The comet's icon: a glowing head with its tail streaming to the upper right. */
 function cometIcon(size: number) {
   const c = document.createElement('canvas');
@@ -131,8 +154,8 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
   const out: Record<string, string> = {};
   for (const id of ids) {
     const phys = PHYSICS.find((p) => p.id === id)!;
-    if (phys.comet) {
-      out[id] = cometIcon(size);
+    if (phys.comet || phys.ship) {
+      out[id] = phys.comet ? cometIcon(size) : shipIcon(size);
       continue;
     }
     const special = phys.station ? stationView : null;
@@ -144,7 +167,7 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
       out[id] = canvas.toDataURL('image/png');
       continue;
     }
-    ball.material = materialFor(id === 'sun' ? 'sun' : phys.surface!);
+    ball.material = materialFor(phys.star ? 'sun' : phys.surface!);
     // Phobos and Deimos: a squashed ball hints at their potato shape
     const shape = phys.shape ?? [1, 1, 1];
     ball.scale.set(shape[0], shape[1], shape[2]).multiplyScalar(fill * 0.94);

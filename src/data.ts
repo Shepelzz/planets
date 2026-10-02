@@ -4,7 +4,16 @@ export type BodyId =
   | 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
   | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon' | 'iss'
   | 'phobos' | 'deimos' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'enceladus' | 'titan' | 'triton'
-  | 'comet';
+  | 'comet'
+  // the hidden "Passengers" mode (?homestead=true): the Homestead II system and the ship on its way
+  | 'homestead_star' | 'homestead' | 'perlyna' | 'burshtyn' | 'zharynka' | 'sapfir' | 'avalon' | 'arcturus';
+
+/**
+ * Where a body lives. Each realm is its own place with its own centre: only one is shown at a time,
+ * and going to another one is a hyperjump (main.ts). 'sol' — our Solar System; 'homestead' — the
+ * Homestead II system from «Passengers»; 'voyage' — deep space halfway, with the ship.
+ */
+export type Realm = 'sol' | 'homestead' | 'voyage';
 
 export interface Atmosphere {
   color: [number, number, number];
@@ -54,6 +63,14 @@ export interface BodyPhysics {
    * bodies.ts (makeComet).
    */
   comet?: CometOrbit;
+  /** not in our Solar System (default 'sol'); only with ?homestead=true in the address */
+  realm?: Realm;
+  /** a star: drawn like the Sun, the centre of its realm (or, Arcturus, far away) */
+  star?: boolean;
+  /** a ship: drawn from its own model, no cut-away or size comparison */
+  ship?: boolean;
+  /** stands still at this spot of its realm instead of orbiting */
+  fixedAt?: [number, number, number];
 }
 
 export interface CometOrbit {
@@ -71,8 +88,9 @@ export interface CometOrbit {
   rush: number;
 }
 
-/** Bodies without a ball to compare with Earth or to cut open: the station and the comet. */
-export const isBall = (b: BodyPhysics) => !b.station && !b.comet;
+/** Bodies without a ball to compare with Earth or to cut open: the station, the comet, the ship. */
+export const isBall = (b: BodyPhysics) => !b.station && !b.comet && !b.ship;
+export const realmOf = (b: BodyPhysics): Realm => b.realm ?? 'sol';
 
 // Earth's year ≈ 150 s on screen; other orbits follow the real period ratios.
 const YEAR = 150;
@@ -94,6 +112,7 @@ export const PHYSICS: BodyPhysics[] = [
     spinSeconds: 400,
     tilt: 7,
     startAngle: 0,
+    star: true,
   },
   {
     id: 'mercury',
@@ -407,6 +426,119 @@ export const PHYSICS: BodyPhysics[] = [
     surface: 'comet',
     shape: [1, 0.66, 0.58],
     comet: { perihelion: 195, aphelion: 820, inclination: 24, turn: -25, rush: 0.55 },
+  },
+
+  // ---------- the hidden «Passengers» mode: placeholders for now (borrowed maps), the look comes later ----------
+  {
+    id: 'homestead_star',
+    realm: 'homestead',
+    star: true,
+    icon: 'radial-gradient(circle at 40% 38%, #fffbe8 0%, #ffe27a 35%, #ffa531 75%, #d0661a 100%)',
+    diameterKm: 1_250_000, // made up: a star a little smaller than the Sun
+    radius: 40,
+    orbit: 0,
+    orbitSeconds: 0,
+    spinSeconds: 380,
+    tilt: 4,
+    startAngle: 0,
+  },
+  {
+    id: 'zharynka',
+    realm: 'homestead',
+    icon: 'radial-gradient(circle at 35% 35%, #ffd0a8 0%, #c8683a 55%, #5a2412 100%)',
+    diameterKm: 6100, // made up
+    radius: size(0.48),
+    orbit: 90,
+    orbitSeconds: YEAR * 0.3,
+    spinSeconds: 70,
+    tilt: 2,
+    startAngle: 1.2,
+    surface: 'mars', // placeholder
+  },
+  {
+    id: 'homestead',
+    realm: 'homestead',
+    icon: 'radial-gradient(circle at 35% 35%, #c8f0ff 0%, #2fa0c8 40%, #2f7a3e 70%, #0b2a40 100%)',
+    diameterKm: 13_500, // made up: a little bigger than Earth
+    radius: size(1.06),
+    orbit: 150,
+    orbitSeconds: YEAR * 1.1,
+    spinSeconds: 64,
+    tilt: 19,
+    startAngle: 2.4,
+    surface: 'earth', // placeholder: its own map (from NASA data, remixed) comes later
+    atmosphere: { color: [0.3, 0.6, 1.0], scale: 1.05, intensity: 0.9 },
+    clouds: true,
+  },
+  {
+    id: 'perlyna',
+    realm: 'homestead',
+    icon: 'radial-gradient(circle at 35% 35%, #ffffff 0%, #d6e2ea 50%, #6d7f8c 100%)',
+    diameterKm: 2400, // made up
+    radius: moonSize(2400),
+    orbit: 22,
+    orbitSeconds: 32,
+    spinSeconds: 32, // tidally locked
+    tilt: 0,
+    startAngle: 0.4,
+    surface: 'europa', // placeholder
+    parent: 'homestead',
+  },
+  {
+    id: 'burshtyn',
+    realm: 'homestead',
+    icon: 'radial-gradient(circle at 35% 35%, #fff0b0 0%, #e0a83a 50%, #6a4512 100%)',
+    diameterKm: 1600, // made up
+    radius: moonSize(1600),
+    orbit: 31,
+    orbitSeconds: 50,
+    spinSeconds: 50, // tidally locked
+    tilt: 0,
+    startAngle: 3.3,
+    surface: 'io', // placeholder
+    parent: 'homestead',
+  },
+  {
+    id: 'sapfir',
+    realm: 'homestead',
+    icon: 'radial-gradient(circle at 35% 35%, #d8f0ff 0%, #4f86d8 50%, #1a2c66 100%)',
+    diameterKm: 98_000, // made up: a giant with rings
+    radius: size(6.5),
+    orbit: 270,
+    orbitSeconds: YEAR * 6,
+    spinSeconds: 30,
+    tilt: 14,
+    startAngle: 4.6,
+    surface: 'neptune', // placeholder
+    rings: true,
+  },
+  {
+    id: 'avalon',
+    realm: 'voyage',
+    ship: true,
+    icon: 'radial-gradient(circle at 50% 50%, #f2f6ff 0%, #9fb2cf 40%, #26324a 100%)',
+    diameterKm: 1, // about a kilometre long
+    radius: 7, // bounding radius of the (placeholder) model
+    orbit: 0,
+    orbitSeconds: 0,
+    spinSeconds: 40, // its living quarters turn round the spine (that makes gravity on board)
+    tilt: 90, // spine across the view; the spin turns it about its own length
+    startAngle: 0,
+    fixedAt: [0, 0, 0],
+  },
+  {
+    id: 'arcturus',
+    realm: 'voyage',
+    star: true,
+    icon: 'radial-gradient(circle at 40% 38%, #fff0d8 0%, #ffb257 35%, #e0641c 75%, #8a2a0a 100%)',
+    diameterKm: 35_000_000, // a red giant: about 25 times wider than the Sun
+    radius: 120,
+    orbit: 0,
+    orbitSeconds: 0,
+    spinSeconds: 900,
+    tilt: 0,
+    startAngle: 0,
+    fixedAt: [-2980, 160, -1840], // far behind the ship as first seen, a little above and to the left so it never hides it
   },
 ];
 

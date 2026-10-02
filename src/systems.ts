@@ -1,20 +1,21 @@
 import type * as THREE from 'three';
 import type { Body } from './bodies';
-import type { BodyId } from './data';
+import { realmOf, type BodyId, type Realm } from './data';
 
 // Moon systems shown only while visiting: a giant's moons (and Mars's) appear when we fly to the
 // planet or one of its moons. While visiting any planet the orbits make room so the neighbours don't
 // loom over it: the inner planets stay, the visited planet moves out to 3× its gap from the inner
 // neighbour (the Sun for Mercury), every planet beyond it to 5× its distance from the visited one
 // (always at least enough to clear a moon system); at the Sun all planets move out to 5× their
-// distance. Back in the overview all return to place. The
-// move is a soft spring: no jerk at the start or the end, and the camera rides along.
+// distance. Back in the overview all return to place. The move is a soft spring: no jerk at the
+// start or the end, and the camera rides along. Each realm (data.ts) does this round its own star;
+// only the bodies of the realm we are in are shown.
 
 const ROOM = 4; // gap left between systems
 
 export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>) {
   const byId = new Map(bodies.map((b) => [b.info.id, b]));
-  const sun = byId.get('sun')!;
+  const starOf = (realm: Realm) => bodies.find((b) => b.info.star && !b.info.fixedAt && realmOf(b.info) === realm);
 
   /** how far each planet's (visiting-only) moons reach from it */
   const systemReach = new Map<BodyId, number>();
@@ -24,7 +25,7 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
     systemReach.set(p, Math.max(systemReach.get(p) ?? 0, b.info.orbit + b.info.radius));
   }
 
-  const planets = bodies.filter((b) => !b.info.parent && b !== sun && !b.info.comet);
+  const planets = bodies.filter((b) => !b.info.parent && !b.info.star && !b.info.comet && !b.info.fixedAt);
   /** How far a planet's always-shown things reach: rings, or moons like the Moon and Charon. */
   const extent = (b: Body) => {
     let e = b.viewRadius;
@@ -44,22 +45,23 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
   function spread(focus: Body | null, dt: number) {
     const visiting = visitedBy(focus);
     const target = new Map<Body, number>(planets.map((p) => [p, p.info.orbit]));
-    if (visiting === sun) {
-      // at the Sun every planet is "beyond" it: all move out to 5× their distance
-      for (const p of planets) target.set(p, p.info.orbit * 5);
+    if (visiting?.info.star) {
+      // at a star every planet is "beyond" it: all move out to 5× their distance
+      for (const p of planets) if (realmOf(p.info) === realmOf(visiting.info)) target.set(p, p.info.orbit * 5);
     } else if (visiting && planets.includes(visiting)) {
       const r = visiting.info.orbit;
-      const i = sorted.indexOf(visiting);
-      const prev = sorted[i - 1];
+      const mine = sorted.filter((p) => realmOf(p.info) === realmOf(visiting.info));
+      const i = mine.indexOf(visiting);
+      const prev = mine[i - 1];
       const reach = systemReach.get(visiting.info.id);
       const band = Math.max(reach ?? 0, visiting.viewRadius) + ROOM;
       // the inner neighbour's edge: a planet with its moons and rings, or the Sun's surface
       const innerOrbit = prev ? prev.info.orbit : 0;
-      const innerEdge = prev ? prev.info.orbit + extents.get(prev)! : sun.info.radius;
+      const innerEdge = prev ? prev.info.orbit + extents.get(prev)! : starOf(realmOf(visiting.info))?.info.radius ?? 0;
       const at = Math.max(innerOrbit + (r - innerOrbit) * 3, innerEdge + band);
       target.set(visiting, at);
       let limit = at + band;
-      for (const p of sorted.slice(i + 1)) {
+      for (const p of mine.slice(i + 1)) {
         const e = extents.get(p)!;
         const t = Math.max(at + (p.info.orbit - r) * 5, limit + e);
         target.set(p, t);
@@ -95,7 +97,7 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
    * system's orbit lines stay (its planet's orbit and the moons'); the others fade out, and back in
    * the overview.
    */
-  function visibility(focus: Body | null, dt: number) {
+  function visibility(focus: Body | null, dt: number, realm: Realm) {
     const k = 1 - Math.exp(-dt * 4);
     const host = visitedBy(focus);
     const visiting = host?.info.id ?? null;
@@ -103,8 +105,8 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
     for (const b of bodies) {
       const p = b.info.parent;
       const mine = (p ?? b.info.id) === visiting;
-      let show = !p || !byId.get(p)!.info.moonsWhenNear || p === visiting;
-      if (show && reach !== undefined && host && !mine && b !== sun)
+      let show = realmOf(b.info) === realm && (!p || !byId.get(p)!.info.moonsWhenNear || p === visiting);
+      if (show && reach !== undefined && host && !mine && !b.info.star)
         show = b.anchor.position.distanceTo(host.anchor.position) > reach + b.viewRadius;
       b.anchor.visible = show;
       const line = lines.get(b.info.id);

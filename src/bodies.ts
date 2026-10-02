@@ -834,12 +834,46 @@ function updateComet(b: Body, time: number, viewer?: THREE.Vector3) {
   parts.veil.material.opacity = (0.4 + 0.6 * act) * (1 - far); // only close up: from afar it would shine through planets
 }
 
+// ---------- the ship (hidden «Passengers» mode) ----------
+// Placeholder until the real model arrives: a spine with a shield dish at the front, engines at the
+// back and three living-quarter blades round the middle. The mesh spins about the spine (the tilt
+// group lays the spine across the view), like the ship's quarters turning to make gravity.
+function makeShipBody(info: BodyInfo, scene: THREE.Scene): Body {
+  const anchor = new THREE.Group();
+  const tilt = new THREE.Group();
+  tilt.rotation.z = info.tilt * DEG;
+  anchor.add(tilt);
+  const R = info.radius;
+  const hull = new THREE.MeshBasicMaterial({ color: 0x9aa8bd });
+  const dark = new THREE.MeshBasicMaterial({ color: 0x4a566a });
+  const glow = new THREE.MeshBasicMaterial({ color: 0x8fd0ff });
+  const ship = new THREE.Group();
+  const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * R, 0.06 * R, 1.8 * R, 12), hull);
+  const shield = new THREE.Mesh(new THREE.SphereGeometry(0.3 * R, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), dark);
+  shield.position.y = 0.9 * R; // the front
+  const engine = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * R, 0.1 * R, 0.25 * R, 16), glow);
+  engine.position.y = -0.95 * R;
+  ship.add(spine, shield, engine);
+  for (let k = 0; k < 3; k++) {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12 * R, 0.9 * R, 0.5 * R), hull);
+    const a = (k / 3) * Math.PI * 2;
+    blade.position.set(Math.cos(a) * 0.32 * R, 0, Math.sin(a) * 0.32 * R);
+    blade.rotation.y = -a;
+    blade.rotation.z = 0.35; // a twist, like the real ship's spiral
+    ship.add(blade);
+  }
+  tilt.add(ship);
+  scene.add(anchor);
+  return { info, anchor, tilt, mesh: ship, viewRadius: R, orbitAngle: 0, spinAngle: 0, materials: [], cut: makeCutUniforms() };
+}
+
 export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
   lowDetail = lowEnd;
   sphereGeo = lowEnd ? new THREE.SphereGeometry(1, 72, 48) : new THREE.SphereGeometry(1, 160, 120);
   return BODIES.map((info) =>
-    info.id === 'sun' ? makeSun(info, scene)
+    info.star ? makeSun(info, scene)
       : info.station ? makeStationBody(info, scene)
+      : info.ship ? makeShipBody(info, scene)
       : info.comet ? makeComet(info, scene)
       : makePlanet(info, scene));
 }
@@ -940,7 +974,8 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const i = b.info;
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
-    if (i.comet) cometPosition(i.comet, b.orbitAngle, b.anchor.position);
+    if (i.fixedAt) b.anchor.position.fromArray(i.fixedAt);
+    else if (i.comet) cometPosition(i.comet, b.orbitAngle, b.anchor.position);
     else b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position, b.orbitR ?? i.orbit)).add(origin);
     if (b.comet) updateComet(b, time, viewer);
     if (b.station) flyNoseFirst(b, parent!, viewer);
@@ -953,6 +988,7 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
   }
   for (const b of bodies) {
     b.tilt.updateMatrixWorld(true);
+    if (!b.materials.length) continue; // the ship (placeholder): nothing to light
     const u = b.materials[0].uniforms;
     if (u.uRingNormal) u.uRingNormal.value.set(0, 1, 0).applyQuaternion(b.tilt.getWorldQuaternion(new THREE.Quaternion()));
     if (b.clouds) {

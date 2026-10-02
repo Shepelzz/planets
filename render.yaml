@@ -186,3 +186,58 @@ services:
       - type: rewrite
         source: /comet/
         destination: /comet.html
+      # hidden «Passengers» mode (?homestead=true): no pages of their own, the app opens them itself
+      - type: rewrite
+        source: /homestead-system
+        destination: /solar-system.html
+      - type: rewrite
+        source: /homestead-system/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /homestead_star
+        destination: /solar-system.html
+      - type: rewrite
+        source: /homestead_star/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /zharynka
+        destination: /solar-system.html
+      - type: rewrite
+        source: /zharynka/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /homestead
+        destination: /solar-system.html
+      - type: rewrite
+        source: /homestead/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /perlyna
+        destination: /solar-system.html
+      - type: rewrite
+        source: /perlyna/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /burshtyn
+        destination: /solar-system.html
+      - type: rewrite
+        source: /burshtyn/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /sapfir
+        destination: /solar-system.html
+      - type: rewrite
+        source: /sapfir/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /avalon
+        destination: /solar-system.html
+      - type: rewrite
+        source: /avalon/
+        destination: /solar-system.html
+      - type: rewrite
+        source: /arcturus
+        destination: /solar-system.html
+      - type: rewrite
+        source: /arcturus/
+        destination: /solar-system.html
