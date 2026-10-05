@@ -63,13 +63,19 @@ export const BUILDER_LABELS = [
   'year', 'temperature', 'weight', 'life', 'zone',
   'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
   'size_small', 'size_medium', 'size_large', 'days', 'years', 'lighter', 'heavier', 'same_weight', 'no_ground',
-  'life_yes', 'life_hot', 'life_cold', 'life_gas',
+  'life_yes', 'life_hot', 'life_cold', 'life_gas', 'life_no_air', 'life_no_water',
+  'air', 'air_none', 'air_thin', 'air_earth', 'air_thick', 'water', 'water_yes', 'water_no',
+  'rings', 'rings_yes', 'rings_no', 'moons', 'sky', 'sky_black', 'sky_pink', 'sky_blue', 'sky_orange',
+  'inside', 'layer_ocean', 'layer_crust', 'layer_mantle', 'layer_iron', 'layer_air', 'layer_ice', 'layer_rock', 'layer_metal',
 ] as const;
 export const BUILDER_SAY = [
   'hint', 'zone', 'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
   'size_small', 'size_medium', 'size_large', 'year_short', 'year_earth', 'year_long',
   'temp_scorching', 'temp_hot', 'temp_mild', 'temp_cold', 'temp_frozen',
   'weight_light', 'weight_earth', 'weight_heavy', 'weight_gas', 'life_yes', 'life_hot', 'life_cold', 'life_gas',
+  'life_no_air', 'life_no_water', 'air_none', 'air_thin', 'air_earth', 'air_thick', 'water_yes', 'water_no',
+  'rings_yes', 'rings_no', 'moons_none', 'moons_some', 'sky_black', 'sky_pink', 'sky_blue', 'sky_orange',
+  'inside_rocky', 'inside_ice', 'inside_gas',
 ] as const;
 export interface BuilderTexts {
   labels: Record<(typeof BUILDER_LABELS)[number], string>;

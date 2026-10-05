@@ -14,6 +14,15 @@ export const MAX_PLANETS = 6;
 export type StarKind = 'red' | 'sun' | 'white' | 'blue';
 export type PlanetKind = 'rocky' | 'ice' | 'gas';
 export type PlanetSize = 'small' | 'medium' | 'large';
+/** a rocky planet's air: none (like the Moon), thin (Mars), like Earth's, thick (Venus) */
+export type Air = 'none' | 'thin' | 'earth' | 'thick';
+
+/** what a planet is made of and has, as far as the physics here needs */
+export interface PlanetMake {
+  kind: PlanetKind;
+  air: Air;
+  water: boolean;
+}
 
 export interface Star {
   /** in Suns */
@@ -44,17 +53,27 @@ export function habitableZone(s: Star) {
 export const yearDays = (s: Star, au: number) => 365.25 * Math.sqrt((au * au * au) / s.mass);
 
 /**
- * Average surface temperature, °C. A rocky planet's air keeps it warmer (Earth: +33 K), and more so
- * towards the outer edge of the zone: there the planet's own thermostat (the carbonate–silicate
- * cycle) lets carbon dioxide build up. That is why the zone reaches out as far as it does, and here it
- * keeps the green band and «warm enough for water» the same thing.
+ * Average surface temperature, °C: the balance of starlight in and heat out, warmed by the planet's
+ * air (the greenhouse effect). No air: none (the Moon). Thin air: a few degrees (Mars). Air like
+ * Earth's: +33 K at Earth's distance, and more towards the outer edge of the zone — there the
+ * planet's own thermostat (the carbonate–silicate cycle) lets carbon dioxide build up, which is why
+ * the zone reaches out as far as it does; so the green band and «warm enough for water» stay the same
+ * thing. Thick air: a runaway greenhouse, hundreds of degrees (Venus: +500 K). Giants have no surface:
+ * the temperature at their cloud tops, from the balance alone.
  */
-export function temperatureC(s: Star, au: number, kind: PlanetKind) {
+export function temperatureC(s: Star, au: number, p: PlanetMake) {
   const balance = (255 * Math.pow(s.lum, 0.25)) / Math.sqrt(au);
   const x = au / Math.sqrt(s.lum); // as far as from the Sun, in AU
-  const greenhouse = kind === 'rocky' ? 33 + 90 * Math.min(Math.max(x - 1, 0), 0.37) : 0;
+  let greenhouse = 0;
+  if (p.kind === 'rocky')
+    greenhouse = { none: 0, thin: 5, earth: 33 + 90 * Math.min(Math.max(x - 1, 0), 0.37), thick: 450 }[p.air];
   return balance + greenhouse - 273;
 }
+
+/** The colour of the sky seen from the ground: black without air, blue like ours, pinkish like Mars's, orange under thick clouds. */
+export type Sky = 'black' | 'pink' | 'blue' | 'orange';
+export const skyOf = (p: PlanetMake): Sky | null =>
+  p.kind !== 'rocky' ? null : ({ none: 'black', thin: 'pink', earth: 'blue', thick: 'orange' } as const)[p.air];
 
 /** Surface gravity of a rocky planet, Earths; giants have no surface. */
 export const gravity = (size: PlanetSize) => ({ small: 0.4, medium: 1, large: 1.6 })[size];
@@ -68,11 +87,14 @@ export function tempBand(c: number): TempBand {
   return 'frozen';
 }
 
-export type LifeVerdict = 'yes' | 'hot' | 'cold' | 'gas';
-export function life(kind: PlanetKind, c: number): LifeVerdict {
-  if (kind !== 'rocky') return 'gas';
+export type LifeVerdict = 'yes' | 'hot' | 'cold' | 'gas' | 'no_air' | 'no_water';
+/** Could life as we know it be there: solid ground, air, liquid water (so not too hot or cold). */
+export function life(p: PlanetMake, c: number): LifeVerdict {
+  if (p.kind !== 'rocky') return 'gas';
+  if (p.air === 'none' || p.air === 'thin') return 'no_air';
   if (c > 40) return 'hot';
   if (c < -5) return 'cold';
+  if (!p.water) return 'no_water';
   return 'yes';
 }
 

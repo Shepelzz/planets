@@ -8,7 +8,7 @@ import { createSky } from '../sky';
 import { createPanel } from './panel';
 import {
   auToScene, habitableZone, MAX_PLANETS, sceneToAu, STARS, starColor, starSceneRadius, tempBand, temperatureC, yearDays,
-  type PlanetKind, type PlanetSize, type StarKind,
+  type Air, type PlanetKind, type PlanetSize, type StarKind,
 } from './physics';
 import './builder.css';
 
@@ -24,6 +24,12 @@ export interface PlanetState {
   au: number;
   /** where on its orbit it is now, radians */
   angle: number;
+  /** a rocky planet's air and water (giants: always gas, no surface water) */
+  air: Air;
+  water: boolean;
+  rings: boolean;
+  /** 0–3 */
+  moons: number;
 }
 export interface State {
   star: StarKind;
@@ -31,10 +37,21 @@ export interface State {
 }
 const STORE = 'planets.builder.v1';
 
+/** A new planet's make-up, like its kind usually is in our system. */
+export function defaults(kind: PlanetKind): Pick<PlanetState, 'air' | 'water' | 'rings' | 'moons'> {
+  if (kind === 'gas') return { air: 'thick', water: false, rings: false, moons: 3 };
+  if (kind === 'ice') return { air: 'thick', water: false, rings: true, moons: 2 };
+  return { air: 'earth', water: true, rings: false, moons: 1 };
+}
+
 function load(): State {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) ?? '') as State;
-    if (s && STARS[s.star] && Array.isArray(s.planets)) return s;
+    if (s && STARS[s.star] && Array.isArray(s.planets)) {
+      // systems kept before planets had air, water, rings and moons
+      s.planets = s.planets.map((p) => ({ ...defaults(p.kind), ...p }));
+      return s;
+    }
   } catch {
     /* nothing kept yet, or storage unavailable */
   }
@@ -217,6 +234,9 @@ interface PlanetView {
   orbit: THREE.LineLoop;
   mat: THREE.MeshStandardMaterial;
   ring: THREE.Mesh;
+  air: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
+  rings: THREE.Mesh;
+  moons: THREE.Mesh[];
 }
 const views = new Map<number, PlanetView>();
 const sphere = new THREE.SphereGeometry(1, 64, 48);
@@ -224,12 +244,56 @@ const orbitMat = new THREE.LineBasicMaterial({ color: 0x8fb4ff, transparent: tru
 const orbitSelMat = new THREE.LineBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.7 });
 const selRingMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
 
-/** How a planet looks: a rocky one by its warmth (scorched, desert, seas, icy), giants by kind. */
+/**
+ * How a planet looks (real maps of the planets and moons that are like it): a rocky one by its warmth,
+ * water and air — scorched, a desert, seas, ice, or Venus's clouds under thick air; giants by kind.
+ */
 function planetMap(p: PlanetState) {
   if (p.kind === 'gas') return 'jupiter.jpg';
   if (p.kind === 'ice') return 'neptune.jpg';
-  return { scorching: 'venus.jpg', hot: 'mars.jpg', mild: 'earth_day.jpg', cold: 'ganymede.jpg', frozen: 'europa.jpg' }[tempBand(temperatureC(STARS[state.star], p.au, p.kind))];
+  const band = tempBand(temperatureC(STARS[state.star], p.au, p));
+  if (p.air === 'thick' && band !== 'cold' && band !== 'frozen') return 'venus.jpg'; // the clouds are all one sees
+  if (band === 'scorching') return 'mercury.jpg';
+  if (band === 'hot') return 'mars.jpg';
+  if (band === 'mild') return p.water && (p.air === 'earth' || p.air === 'thick') ? 'earth_day.jpg' : 'mars.jpg';
+  if (p.water) return 'europa.jpg'; // its seas frozen over
+  return band === 'cold' ? 'ganymede.jpg' : 'callisto.jpg';
 }
+
+/** the glow of a planet's air at its rim: none, thin and reddish, blue like ours, thick and golden */
+function airLook(p: PlanetState): [number, number, number, number] {
+  if (p.kind === 'gas') return [1.0, 0.86, 0.62, 0.6];
+  if (p.kind === 'ice') return [0.55, 0.82, 1.0, 0.8];
+  return ({ none: [0, 0, 0, 0], thin: [1.0, 0.62, 0.48, 0.35], earth: [0.32, 0.6, 1.0, 1.0], thick: [1.0, 0.82, 0.48, 1.2] } as const)[p.air] as [number, number, number, number];
+}
+const AIR_VERT = /* glsl */ `
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vN = normalize(normalMatrix * normal);
+  vV = normalize(-mv.xyz);
+  gl_Position = projectionMatrix * mv;
+}`;
+const AIR_FRAG = /* glsl */ `
+uniform vec3 uColor;
+uniform float uStrength;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
+  gl_FragColor = vec4(uColor * rim * uStrength, 1.0);
+}`;
+
+/** Saturn's ring photo is a strip from the inner edge to the outer one: map it across the ring. */
+function ringGeometry(inner: number, outer: number) {
+  const g = new THREE.RingGeometry(inner, outer, 128, 1);
+  const pos = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, (Math.hypot(pos.getX(i), pos.getY(i)) - inner) / (outer - inner), 0.5);
+  return g;
+}
+const ringGeo = ringGeometry(1.35, 2.3);
+const moonGeo = new THREE.SphereGeometry(1, 32, 24);
 // drawn sizes: not to scale (next to the zone's width real planets would be invisible specks)
 const planetRadius = (p: PlanetState) => (p.kind === 'gas' ? 17 : p.kind === 'ice' ? 13 : { small: 5, medium: 7.5, large: 10 }[p.size]);
 /** drawn distance: never inside the star */
@@ -246,9 +310,16 @@ function viewOf(p: PlanetState) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.35, 1.5, 64), selRingMat);
     ring.rotation.x = -Math.PI / 2;
     group.add(ring);
+    const air = new THREE.Mesh(
+      new THREE.SphereGeometry(1.06, 48, 32),
+      new THREE.ShaderMaterial({ vertexShader: AIR_VERT, fragmentShader: AIR_FRAG, uniforms: { uColor: { value: new THREE.Color() }, uStrength: { value: 1 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    const rings = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ map: texture('saturn_ring.png'), transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+    rings.rotation.set(-Math.PI / 2 + 0.45, 0, 0.2);
+    group.add(air, rings);
     const orbit = new THREE.LineLoop(circle(1), orbitMat);
     scene.add(group, orbit);
-    v = { group, mesh, orbit, mat, ring };
+    v = { group, mesh, orbit, mat, ring, air, rings, moons: [] };
     views.set(p.id, v);
   }
   return v;
@@ -264,6 +335,25 @@ function refreshPlanet(p: PlanetState) {
   const r = planetRadius(p);
   v.mesh.scale.setScalar(r);
   v.ring.scale.setScalar(r);
+  const [ar, ag, ab, strength] = airLook(p);
+  v.air.visible = strength > 0;
+  v.air.material.uniforms.uColor.value.setRGB(ar, ag, ab);
+  v.air.material.uniforms.uStrength.value = strength;
+  v.air.scale.setScalar(r);
+  v.rings.visible = p.rings;
+  v.rings.scale.setScalar(r);
+  // moons: little grey worlds at a few planet-widths
+  while (v.moons.length < p.moons) {
+    const m = new THREE.Mesh(moonGeo, new THREE.MeshStandardMaterial({ map: texture('moon.jpg'), roughness: 1 }));
+    m.userData.phase = Math.random() * Math.PI * 2;
+    v.moons.push(m);
+    v.group.add(m);
+  }
+  while (v.moons.length > p.moons) v.group.remove(v.moons.pop()!);
+  v.moons.forEach((m, i) => {
+    m.scale.setScalar(r * (0.22 - i * 0.03));
+    m.userData.dist = r * (p.rings ? 2.8 : 2) + i * r * 0.8;
+  });
   v.ring.visible = p.id === selected;
   v.orbit.material = p.id === selected ? orbitSelMat : orbitMat;
   const d = drawnR(p);
@@ -276,6 +366,8 @@ function refreshAll() {
     if (!state.planets.some((p) => p.id === id)) {
       scene.remove(v.group, v.orbit);
       v.mat.dispose();
+      v.air.material.dispose();
+      for (const m of v.moons) (m.material as THREE.Material).dispose();
       views.delete(id);
     }
   for (const p of state.planets) refreshPlanet(p);
@@ -303,6 +395,7 @@ const panel = createPanel({
       size: 'medium',
       au: base * (0.85 + Math.random() * 0.3),
       angle: Math.random() * Math.PI * 2,
+      ...defaults(kind),
     };
     state.planets.push(p);
     selected = p.id;
@@ -429,6 +522,10 @@ function frame(now: number) {
       const d = drawnR(p);
       v.group.position.set(Math.cos(p.angle) * d, 0, Math.sin(p.angle) * d);
       v.mesh.rotation.y += dt * 0.3;
+      v.moons.forEach((m, i) => {
+        m.userData.phase += dt * (1.2 - i * 0.25);
+        m.position.set(Math.cos(m.userData.phase) * m.userData.dist, 0, Math.sin(m.userData.phase) * m.userData.dist);
+      });
     }
   }
   starMesh.rotation.y += dt * 0.02;

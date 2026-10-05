@@ -113,3 +113,24 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .remove, .clear { display: block; width: 100%; margin-top: 12px; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.07); color: var(--muted); font-weight: 600; }
 .clear { margin-top: 20px; }
+
+/* a row of options with one speaker (it explains the option chosen now) */
+.choice { position: relative; }
+.choice > .say { position: absolute; top: -6px; right: 0; }
+.segments { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg { flex: 1 1 0; min-width: 52px; min-height: 44px; padding: 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, 0.07); border: 1px solid transparent; font-size: 14px; font-weight: 600; }
+.seg.on { background: rgba(255, 210, 122, 0.16); border-color: rgba(255, 210, 122, 0.55); }
+
+.sky-dot { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 50%; vertical-align: -1px; border: 1px solid rgba(255, 255, 255, 0.3); }
+.sky-black { background: #05060c; }
+.sky-pink { background: #d9a08a; }
+.sky-blue { background: #5aa6ff; }
+.sky-orange { background: #e8a64a; }
+
+.layers { display: flex; align-items: center; gap: 14px; padding: 4px 0; }
+.layers svg { width: 92px; height: 92px; flex: none; }
+.layers ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.layers li { display: flex; align-items: center; gap: 8px; }
+.layers i { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.results + h2, .results + .choice { margin-top: 4px; }
+.results .life.no_air, .results .life.no_water, .results .life.hot, .results .life.cold { background: rgba(255, 255, 255, 0.06); }
