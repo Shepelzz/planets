@@ -139,11 +139,14 @@ button {
   backdrop-filter: blur(18px) saturate(140%);
   border: 1px solid var(--line);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* iOS 12: momentum scrolling, as a finger expects */
   scrollbar-width: none;
   scroll-snap-type: x proximity;
   z-index: 5;
 }
 #dock::-webkit-scrollbar { display: none; }
+/* Safari 12 (old iPads) snaps a scrolled row back to its first chip when the finger lifts: no snapping there */
+body.low-end #dock { scroll-snap-type: none; }
 
 .chip {
   flex: 0 0 auto;
@@ -515,6 +518,7 @@ body.has-moons { --moons-h: 70px; } /* the row (44 px buttons: 58 px) + the same
   align-items: center;
   max-width: calc(100vw - 24px);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 6px;
   border-radius: 20px;
   background: var(--glass);
