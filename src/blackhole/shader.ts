@@ -21,8 +21,10 @@ uniform float uRoll;      // tilt of the picture (the film's diagonal disk)
 uniform float uTime;
 uniform float uDoppler;   // 0: symmetric, as in the film; 1: the side coming at us brighter and bluer
 uniform float uStep;      // step size factor (quality)
-uniform float uRing;      // the thin bright photon ring at the shadow's edge (0..1)
+uniform float uRing;
+uniform float uDebug;     // 1: show how fast the sky direction changes between pixels (seams)      // the thin bright photon ring at the shadow's edge (0..1)
 uniform sampler2D uSky;   // the Milky Way (equirectangular)
+uniform vec2 uSkySize;    // its size in texels
 uniform sampler2D uStreaks; // the disk's streaks, baked once (bakeStreaks): angle across, radius down
 ${NOISE_GLSL}
 ${SRGB_GLSL}
@@ -44,14 +46,23 @@ float hash3(vec3 p) {
 // The sky in a direction. Called once per pixel after the loop (not inside it), so the texture's
 // mip level and the pixel size, taken from how fast the direction changes between pixels, are well
 // defined: far from the hole the sky is sharp, close to it (light smeared round the hole) it blurs.
-vec3 sky(vec3 d) {
+vec2 skyUV(vec3 d, bool wrapHalf) {
   float phi = atan(d.z, d.x) / 6.2831853;
+  float u = wrapHalf ? fract(phi + 0.5) - 0.5 : fract(phi);
+  return vec2(u + 0.5, 1.0 - acos(clamp(d.y, -1.0, 1.0)) / 3.1415927);
+}
+// d: where the light came from; even: the same by the simple far-field formula, for every pixel. The
+// map's sharpness (mip level) is taken from how fast 'even' changes between pixels, not 'd': on the
+// line where the stepped and the formula rays meet, neighbouring 'd's come from different sums and
+// would read the map blurrier along a thin line.
+vec3 sky(vec3 d, vec3 even) {
   // longitude: of the two ways to wrap it, take the one without a jump here (else a seam of blur)
-  float u1 = fract(phi);
-  float u2 = fract(phi + 0.5) - 0.5;
-  float u = fwidth(u1) <= fwidth(u2) ? u1 : u2;
-  vec2 uv = vec2(u + 0.5, 1.0 - acos(clamp(d.y, -1.0, 1.0)) / 3.1415927);
-  vec3 c = srgbToLinear(texture2D(uSky, uv).rgb) * 1.4;
+  vec2 a1 = skyUV(even, false), a2 = skyUV(even, true);
+  bool wrapped = fwidth(a1.x) > fwidth(a2.x);
+  vec2 g = fwidth(wrapped ? a2 : a1) * uSkySize;
+  float lod = clamp(log2(max(max(g.x, g.y), 1e-4)), 0.0, 12.0);
+  vec2 uv = skyUV(d, wrapped);
+  vec3 c = srgbToLinear(texture2DLodEXT(uSky, uv, lod).rgb) * 1.4;
   // sharp stars (the first prototype's)
   vec3 cell = floor(d * 260.0);
   float h = hash3(cell);
@@ -132,7 +143,8 @@ void main() {
   // A ray that never comes within the disk (most of the sky) needs no stepping: weak-field bending,
   // 2M/b·(1 − cos) to infinity, is exact enough out there and costs nothing.
   bool straight = b0 > DISK_OUT + 1.5 && r0 < FAR;
-  if (straight) dir = normalize(dir + (1.0 - dot(pos, dir) / r0) / b0 * normalize(dot(pos, dir) * dir - pos));
+  vec3 evenDir = normalize(dir + (1.0 - dot(pos, dir) / r0) / max(b0, 0.5) * normalize(dot(pos, dir) * dir - pos + vec3(0.0, 1e-6, 0.0)));
+  if (straight) dir = evenDir;
   if (!straight) for (int i = 0; i < ${maxSteps}; i++) {
     float r = length(pos);
     // fine steps near the hole, long ones far away
@@ -154,7 +166,17 @@ void main() {
     if (dot(pos, pos) < HORIZON * HORIZON) { skyPart = 0.0; break; } // fell in: black
     if (r > FAR && dot(pos, dir) > 0.0) break;
   }
-  col += (1.0 - covered) * skyPart * sky(normalize(dir));
+  // The last bit of bending from where the stepping stopped out to infinity, by the same formula as
+  // the far rays: without it neighbouring pixels stop at slightly different places, their directions
+  // jitter, the sky map is read blurrier there than next to them, and a seam shows where the two meet.
+  if (!straight && skyPart > 0.0) {
+    vec3 nd = normalize(dir);
+    float rr = length(pos);
+    float bb = max(length(cross(pos, nd)), 0.001);
+    dir = normalize(nd + (1.0 - dot(pos, nd) / rr) / bb * normalize(dot(pos, nd) * nd - pos + vec3(0.0, 1e-6, 0.0)));
+  }
+  if (uDebug > 0.5) { gl_FragColor = vec4(vec3(length(fwidth(normalize(dir))) * 250.0), 1.0); return; }
+  col += (1.0 - covered) * skyPart * sky(normalize(dir), evenDir);
   // the photon ring: light that circled the hole just outside the shadow, a thin bright line round it
   float b = sqrt(h2);
   float ring = exp(-pow((b - CRITICAL_B - 0.02) / 0.025, 2.0)) + 0.3 * exp(-pow((b - CRITICAL_B - 0.05) / 0.12, 2.0));

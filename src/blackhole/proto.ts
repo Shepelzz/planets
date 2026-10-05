@@ -46,7 +46,9 @@ const uniforms = {
   uDoppler: { value: 0 },
   uStep: { value: 1 },
   uRing: { value: 1 },
+  uDebug: { value: 0 },
   uSky: { value: sky },
+  uSkySize: { value: new THREE.Vector2(lowEnd ? 2048 : 4096, lowEnd ? 1024 : 2048) },
   uStreaks: { value: bakeStreaks(renderer) },
 };
 const scene = new THREE.Scene();
@@ -63,7 +65,7 @@ function setLevel(i: number) {
     uniforms,
     depthTest: false,
     depthWrite: false,
-    extensions: { derivatives: true }, // fwidth for the sky's seam on WebGL 1
+    extensions: { derivatives: true, shaderTextureLOD: true }, // fwidth and texture2DLodEXT on WebGL 1
   });
   uniforms.uStep.value = l.step;
   resize();
