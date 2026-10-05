@@ -13,7 +13,12 @@ export const MAX_PLANETS = 6;
 
 export type StarKind = 'red' | 'sun' | 'white' | 'blue';
 export type PlanetKind = 'rocky' | 'ice' | 'gas';
+/** a rocky planet's size band (for the words and the voice); the size itself is a radius in Earths */
 export type PlanetSize = 'small' | 'medium' | 'large';
+export const sizeBand = (r: number): PlanetSize => (r < 0.75 ? 'small' : r > 1.25 ? 'large' : 'medium');
+/** the slider's range for a rocky planet's radius, Earths: from smaller than Mars to a big super-Earth */
+export const MIN_R = 0.3;
+export const MAX_R = 2;
 /** a rocky planet's air: none (like the Moon), thin (Mars), like Earth's, thick (Venus) */
 export type Air = 'none' | 'thin' | 'earth' | 'thick';
 
@@ -96,8 +101,8 @@ export type Sky = 'black' | 'pink' | 'blue' | 'orange';
 export const skyOf = (p: PlanetMake): Sky | null =>
   p.kind !== 'rocky' ? null : ({ none: 'black', thin: 'pink', earth: 'blue', thick: 'orange' } as const)[p.air];
 
-/** Surface gravity of a rocky planet, Earths; giants have no surface. */
-export const gravity = (size: PlanetSize) => ({ small: 0.4, medium: 1, large: 1.6 })[size];
+/** Surface gravity of a rocky planet of this radius (Earths): of the same stuff as Earth, g ∝ radius. */
+export const gravity = (r: number) => r;
 
 export type TempBand = 'scorching' | 'hot' | 'mild' | 'cold' | 'frozen';
 export function tempBand(c: number): TempBand {
@@ -158,13 +163,13 @@ export const starSceneRadius = (s: Star) => 8 * Math.pow(s.radius, 0.6);
 // al. 1996). Masses in Earths: Mars-like 0.1, Earth 1, a super-Earth 5, Neptune-like 17, Jupiter 318.
 
 const EARTH_IN_SUNS = 3.0e-6;
-export function massEarths(p: { kind: PlanetKind; size: PlanetSize }) {
+export function massEarths(p: { kind: PlanetKind; r: number }) {
   if (p.kind === 'gas') return 318;
   if (p.kind === 'ice') return 17;
-  return { small: 0.1, medium: 1, large: 5 }[p.size];
+  return p.r * p.r * p.r; // the same stuff as Earth: mass ∝ radius³
 }
 /** Are these two planets' orbits too near to last? */
-export function tooClose(pair: Star, a: { kind: PlanetKind; size: PlanetSize; au: number }, b: { kind: PlanetKind; size: PlanetSize; au: number }) {
+export function tooClose(pair: Star, a: { kind: PlanetKind; r: number; au: number }, b: { kind: PlanetKind; r: number; au: number }) {
   const hill = Math.cbrt(((massEarths(a) + massEarths(b)) * EARTH_IN_SUNS) / (3 * pair.mass)) * ((a.au + b.au) / 2);
   return Math.abs(a.au - b.au) < 10 * hill;
 }

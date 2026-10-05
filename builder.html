@@ -10,8 +10,14 @@
   <body>
     <!-- «Моя система»: build your own star system (src/builder/). Its own page for now, not linked from the app. -->
     <canvas id="scene" touch-action="none"></canvas>
-    <a class="back" href="/solar-system"></a>
-    <aside id="panel"></aside>
+    <header class="topbar">
+      <a class="back" href="/solar-system"></a>
+      <b class="title"></b>
+      <div class="top-actions"><button id="btn-awards"></button><button id="btn-overview"></button></div>
+    </header>
+    <aside id="sheet" hidden></aside>
+    <div id="eventbar" hidden></div>
+    <nav id="dock"></nav>
     <script type="module" src="/src/builder/main.ts"></script>
   </body>
 </html>

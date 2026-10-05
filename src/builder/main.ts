@@ -12,7 +12,7 @@ import { createPanel } from './panel';
 import { createStudio, type Climate } from './studio';
 import {
   auToScene, habitableZone, MAX_PLANETS, tooClose, pairStars, pairYearDays, sceneToAu, separation, unstableWithin, STARS, starColor, starSceneRadius, tempBand, temperatureC, yearDays,
-  type Air, type PlanetKind, type PlanetSize, type StarKind,
+  type Air, type PlanetKind, type StarKind,
 } from './physics';
 import './builder.css';
 
@@ -23,7 +23,8 @@ import './builder.css';
 export interface PlanetState {
   id: number;
   kind: PlanetKind;
-  size: PlanetSize;
+  /** a rocky planet's radius, Earths (giants are drawn by kind) */
+  r: number;
   /** distance from the star, AU */
   au: number;
   /** where on its orbit it is now, radians */
@@ -63,8 +64,12 @@ function load(): State {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) ?? '') as State;
     if (s && STARS[s.star] && Array.isArray(s.planets)) {
-      // systems kept before planets had air, water, rings and moons
-      s.planets = s.planets.map((p) => ({ ...defaults(p.kind), ...p }));
+      // systems kept before planets had air, water, rings and moons, or a size instead of a radius
+      s.planets = s.planets.map((p) => {
+        const { size, ...rest } = p as PlanetState & { size?: 'small' | 'medium' | 'large' };
+        const r = rest.r ?? (size ? { small: 0.53, medium: 1, large: 1.6 }[size] : 1);
+        return { ...defaults(p.kind), ...rest, r };
+      });
       return s;
     }
   } catch {
@@ -235,7 +240,11 @@ function applyStar(frame: boolean) {
   zone.geometry = new THREE.RingGeometry(inner, outer, 160);
   zoneEdges[0].scale.setScalar(inner);
   zoneEdges[1].scale.setScalar(outer);
-  if (frame) frameView();
+  if (frame) {
+    // a new star, a new size of everything: glide to the new distances
+    flying = 1.4;
+    setLimits();
+  }
 }
 
 /** The pair circles its centre of mass: the heavier star nearer the middle, on a smaller circle. */
@@ -253,16 +262,20 @@ function placeStars() {
 /** The part of the screen the panel leaves free (the panel is on the right, or a sheet at the bottom). */
 function freeArea() {
   const w = window.innerWidth, h = window.innerHeight;
-  const rc = document.getElementById('panel')!.getBoundingClientRect();
-  const sheet = rc.top > h * 0.25; // a bottom sheet rather than a side column
-  const right = sheet ? w : rc.left - 8;
-  const bottom = sheet ? rc.top - 8 : h;
-  const top = 64; // under the back button
+  let right = w;
+  let bottom = document.getElementById('dock')!.getBoundingClientRect().top - 8;
+  const sheetEl = document.getElementById('sheet')!;
+  if (!sheetEl.hidden) {
+    const rc = sheetEl.getBoundingClientRect();
+    if (rc.top > h * 0.25) bottom = Math.min(bottom, rc.top - 8); // a sheet at the bottom
+    else right = rc.left - 8; // a column on the right
+  }
+  const top = 64; // under the top bar
   return { cx: right / 2, cy: (top + bottom) / 2, w: right, h: bottom - top };
 }
 
-/** Look at the whole system (the zone and every planet) from above at a slant, filling the free area. */
-function frameView() {
+/** How far to stand to see the whole system (the zone and every planet) filling the free area. */
+function overviewDistance() {
   const outer = auToScene(habitableZone(pairOf(state)).outer);
   const far = Math.max(outer, ...state.planets.map((p) => drawnR(p) + planetRadius(p))) * 1.15 + 10;
   const a = freeArea();
@@ -270,11 +283,55 @@ function frameView() {
   // the half-size of the free area as a slope from the camera; the system's disk, seen at a slant, is
   // about as tall as it is wide times 0.75
   const fit = Math.min((tanV * a.w) / window.innerHeight, (tanV * a.h) / window.innerHeight / 0.75);
-  const dir = new THREE.Vector3(0, 0.75, 1).normalize();
-  camera.position.copy(dir.multiplyScalar(far / fit));
+  return far / fit;
+}
+/** Look at the whole system at once, from above at a slant (no flight: the first view). */
+function frameView() {
+  camera.position.copy(new THREE.Vector3(0, 0.75, 1).normalize().multiplyScalar(overviewDistance()));
   controls.target.set(0, 0, 0);
-  controls.minDistance = starR * 2.5;
-  controls.maxDistance = camera.position.length() * 3;
+  setLimits();
+}
+
+// ---------- flying the view to the star, a planet, or the whole system ----------
+/** what the view is on: the star(s), a planet (id), or the whole system (null) */
+let focus: 'star' | number | null = null;
+/** seconds left of a fly-in (then the view just rides along with its body) */
+let flying = 0;
+const focusPlanet = () => (typeof focus === 'number' ? state.planets.find((p) => p.id === focus) ?? null : null);
+function focusDistance() {
+  const p = focusPlanet();
+  if (p) return planetRadius(p) * (p.rings || p.moons ? 9 : 6);
+  if (focus === 'star') return starR * 5;
+  return overviewDistance();
+}
+function setLimits() {
+  const p = focusPlanet();
+  controls.minDistance = p ? planetRadius(p) * 1.6 : focus === 'star' ? starR * 1.8 : starR * 2.5;
+  controls.maxDistance = overviewDistance() * 3;
+}
+function flyTo(to: 'star' | number | null) {
+  focus = to;
+  flying = 1.4;
+  setLimits();
+}
+const prevTarget = new THREE.Vector3();
+const toCam = new THREE.Vector3();
+/** Once a frame: the view's centre moves to its body (and rides along with it), its distance flies in. */
+function followFocus(dt: number) {
+  const p = focusPlanet();
+  if (typeof focus === 'number' && !p) focus = null; // the planet is gone
+  const want = p ? views.get(p.id)?.group.position ?? new THREE.Vector3() : new THREE.Vector3();
+  const k = 1 - Math.exp(-dt * 4.5);
+  prevTarget.copy(controls.target);
+  if (flying > 0) controls.target.lerp(want, k);
+  else controls.target.copy(want);
+  camera.position.add(toCam.subVectors(controls.target, prevTarget));
+  if (flying > 0) {
+    flying -= dt;
+    toCam.subVectors(camera.position, controls.target);
+    const d = toCam.length();
+    camera.position.copy(controls.target).addScaledVector(toCam.normalize(), d + (focusDistance() - d) * k);
+  }
 }
 
 /** Shift the picture's centre into the free area (smoothly, as the panel grows and shrinks). */
@@ -374,7 +431,7 @@ function ringGeometry(inner: number, outer: number) {
 const ringGeo = ringGeometry(1.35, 2.3);
 const moonGeo = new THREE.SphereGeometry(1, 32, 24);
 // drawn sizes: not to scale (next to the zone's width real planets would be invisible specks)
-const planetRadius = (p: PlanetState) => (p.kind === 'gas' ? 17 : p.kind === 'ice' ? 13 : { small: 5, medium: 7.5, large: 10 }[p.size]);
+const planetRadius = (p: PlanetState) => (p.kind === 'gas' ? 17 : p.kind === 'ice' ? 13 : 7.5 * Math.pow(p.r, 0.8));
 /** drawn distance: never inside the star */
 const drawnR = (p: PlanetState) => Math.max(auToScene(p.au), starR + planetRadius(p) + 3);
 
@@ -619,7 +676,6 @@ const panel = createPanel({
   collide,
   pullMoon,
   undo,
-  selected: () => selected,
   setStar(k) {
     state.star = k;
     applyStar(true);
@@ -633,14 +689,14 @@ const panel = createPanel({
     save();
   },
   addPlanet(kind) {
-    if (state.planets.length >= MAX_PLANETS) return;
+    if (state.planets.length >= MAX_PLANETS) return null;
     const hz = habitableZone(pairOf(state));
     // rocky ones start in the zone of life; giants farther out, as in our system
     const base = kind === 'rocky' ? (hz.inner + hz.outer) / 2 : hz.outer * (kind === 'gas' ? 3.5 : 9);
     const p: PlanetState = {
       id: Math.max(0, ...state.planets.map((x) => x.id)) + 1,
       kind,
-      size: 'medium',
+      r: 1,
       au: base * (0.85 + Math.random() * 0.3),
       angle: Math.random() * Math.PI * 2,
       ...defaults(kind),
@@ -649,10 +705,30 @@ const panel = createPanel({
     selected = p.id;
     refreshAll();
     save();
+    return p.id;
   },
   select(id) {
     selected = id;
-    refreshAll();
+    for (const p of state.planets) refreshPlanet(p); // the highlight ring and orbit (the panel draws itself)
+  },
+  live(id, change) {
+    const p = state.planets.find((x) => x.id === id);
+    if (!p) return;
+    Object.assign(p, change);
+    for (const q of state.planets) refreshPlanet(q); // its neighbours' warnings may change too
+  },
+  focus: flyTo,
+  orbitRange(id) {
+    const p = state.planets.find((x) => x.id === id)!;
+    const pair = pairOf(state);
+    const hz = habitableZone(pair);
+    return {
+      min: sceneToAu(starR + planetRadius(p) + 3),
+      max: sceneToAu(auToScene(hz.outer) * 3.2),
+      zoneIn: hz.inner,
+      zoneOut: hz.outer,
+      unstable: unstableWithin(pair),
+    };
   },
   update(id, change) {
     const p = state.planets.find((x) => x.id === id);
@@ -708,19 +784,16 @@ function aim(e: PointerEvent) {
   ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
 }
-canvas.addEventListener('pointerdown', (e) => {
-  if (studio.active()) return; // the painting studio has the canvas
-  down = { x: e.clientX, y: e.clientY };
-  if (happening) return; // let it happen
+/** the planet (or the star) under a finger, a little generously: small planets are hard to hit */
+function bodyAt(e: PointerEvent): PlanetState | 'star' | null {
   aim(e);
-  // a little generous: small planets are hard to hit with a finger
   const meshes = [...views.values()].map((v) => v.mesh);
   let found = ray.intersectObjects(meshes)[0]?.object;
   if (!found) {
     let best = Infinity;
+    const rc = canvas.getBoundingClientRect();
     for (const v of views.values()) {
       const s = v.group.position.clone().project(camera);
-      const rc = canvas.getBoundingClientRect();
       const d = Math.hypot(((s.x + 1) / 2) * rc.width + rc.left - e.clientX, ((1 - s.y) / 2) * rc.height + rc.top - e.clientY);
       if (d < 34 && d < best) {
         best = d;
@@ -728,35 +801,44 @@ canvas.addEventListener('pointerdown', (e) => {
       }
     }
   }
-  if (found) {
-    dragging = state.planets.find((p) => p.id === found!.userData.id) ?? null;
-    selected = dragging?.id ?? null;
-    controls.enabled = false;
-    refreshAll();
-  }
+  if (found) return state.planets.find((p) => p.id === found!.userData.id) ?? null;
+  if (ray.intersectObjects(suns.filter((s) => s.group.visible).map((s) => s.mesh))[0]) return 'star';
+  return null;
+}
+/** the planet under the finger that went down: a tap opens its window, a drag moves it */
+let pressed: PlanetState | 'star' | null = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (studio.active()) return; // the painting studio has the canvas
+  down = { x: e.clientX, y: e.clientY };
+  if (happening) return; // let it happen
+  pressed = bodyAt(e);
+  if (pressed && pressed !== 'star') controls.enabled = false; // the finger holds a planet, not the view
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (!dragging) return;
+  if (!pressed || pressed === 'star' || !down) return;
+  if (!dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8) return;
+  if (!dragging) {
+    dragging = pressed;
+    selected = dragging.id;
+  }
   aim(e);
   if (!ray.ray.intersectPlane(plane, hit)) return;
   const outer = auToScene(habitableZone(pairOf(state)).outer);
   const r = THREE.MathUtils.clamp(Math.hypot(hit.x, hit.z), starR + planetRadius(dragging) + 3, outer * 3.2);
   dragging.au = sceneToAu(r);
   dragging.angle = Math.atan2(hit.z, hit.x);
-  refreshPlanet(dragging);
-  panel.render();
+  for (const p of state.planets) refreshPlanet(p);
+  panel.refreshLive();
 });
-const endDrag = (e: PointerEvent) => {
-  const tap = down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8;
+const endDrag = () => {
   if (dragging) {
     save();
-    if (awards.check(state)) panel.render(); // a planet dragged somewhere new may be a discovery
-  }
-  else if (tap && selected !== null) {
-    selected = null; // a tap on empty space puts the planet's card away
-    refreshAll();
-  }
+    awards.check(state);
+    panel.render(); // its window (if open) shows where it is now
+  } else if (pressed === 'star') panel.openStar();
+  else if (pressed) panel.openPlanet(pressed.id);
   dragging = null;
+  pressed = null;
   down = null;
   controls.enabled = true;
 };
@@ -830,6 +912,7 @@ function frame(now: number) {
   }
   for (const v of views.values()) if (v.painted) v.painted.uniforms.uTime.value = now / 1000;
   followFreeArea();
+  followFocus(dt);
   controls.update();
   sky.group.position.copy(camera.position);
   renderer.render(scene, camera);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { PlanetState } from './main';
-import { massEarths, type PlanetSize } from './physics';
+import { massEarths, MAX_R } from './physics';
 
 // What happens when worlds meet (the «Що буде?» buttons), after what is known of young star systems:
 //   · two rocky planets merge into a bigger one, molten all over, a new moon gathering from the debris
@@ -9,7 +9,6 @@ import { massEarths, type PlanetSize } from './physics';
 //   · a moon pushed inside its planet's Roche limit is pulled apart by tides into a ring.
 // Here: the rules of the result, and the flash and the debris that go with it.
 
-const SIZES: PlanetSize[] = ['small', 'medium', 'large'];
 
 export type EventKind = 'merge' | 'swallow' | 'giants' | 'ring';
 
@@ -19,8 +18,8 @@ export function mergePlanets(a: PlanetState, b: PlanetState): { keep: PlanetStat
   const au = (a.au * massEarths(a) + b.au * massEarths(b)) / (massEarths(a) + massEarths(b));
   const keep: PlanetState = { ...big, au, rings: a.rings || b.rings };
   if (big.kind === 'rocky' && small.kind === 'rocky') {
-    // bigger, molten, and a new moon from the debris (at most three)
-    keep.size = SIZES[Math.min(2, Math.max(SIZES.indexOf(a.size), SIZES.indexOf(b.size)) + 1)];
+    // bigger (all the rock kept: radius³ adds up), molten, and a new moon from the debris (at most three)
+    keep.r = Math.min(MAX_R * 1.1, Math.cbrt(a.r ** 3 + b.r ** 3));
     keep.moons = Math.min(3, a.moons + b.moons + 1);
     keep.water = a.water || b.water; // it boils off, then rains back as the planet cools
     keep.molten = 1;
