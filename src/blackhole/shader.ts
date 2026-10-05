@@ -179,7 +179,10 @@ void main() {
   col += (1.0 - covered) * skyPart * sky(normalize(dir), evenDir);
   // the photon ring: light that circled the hole just outside the shadow, a thin bright line round it
   float b = sqrt(h2);
-  float ring = exp(-pow((b - CRITICAL_B - 0.02) / 0.025, 2.0)) + 0.3 * exp(-pow((b - CRITICAL_B - 0.05) / 0.12, 2.0));
+  // (squares written out: pow() of a negative number is undefined in GLSL, NaN on most GPUs; inside
+  // the shadow that was invisible black, but the glow pass smeared it into black ripples)
+  float x1 = (b - CRITICAL_B - 0.02) / 0.025, x2 = (b - CRITICAL_B - 0.05) / 0.12;
+  float ring = exp(-x1 * x1) + 0.3 * exp(-x2 * x2);
   col += uRing * ring * vec3(1.0, 0.86, 0.66) * 0.9 * (1.0 - covered * 0.6);
   // filmic exposure
   col = vec3(1.0) - exp(-col * 1.35);
