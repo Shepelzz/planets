@@ -60,7 +60,9 @@ vec3 sky(vec3 d, vec3 even) {
   vec2 a1 = skyUV(even, false), a2 = skyUV(even, true);
   bool wrapped = fwidth(a1.x) > fwidth(a2.x);
   vec2 g = fwidth(wrapped ? a2 : a1) * uSkySize;
-  float lod = clamp(log2(max(max(g.x, g.y), 1e-4)), 0.0, 12.0);
+  // never the sharpest level: the map is very dark, and at full detail its 8-bit steps and JPEG grain,
+  // brightened, show as black ripples; the Milky Way is a soft glow anyway (the stars are drawn apart)
+  float lod = clamp(log2(max(max(g.x, g.y), 1e-4)), 2.0, 12.0);
   vec2 uv = skyUV(d, wrapped);
   vec3 c = srgbToLinear(texture2DLodEXT(uSky, uv, lod).rgb) * 1.4;
   // sharp stars (the first prototype's)
