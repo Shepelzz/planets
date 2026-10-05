@@ -5,7 +5,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { assetUrl } from '../assets';
 import { keepPointersOnCanvas } from '../pointerFix';
 import { createSky } from '../sky';
+import { newPainting, oceanShare, paintedMaterial, paintingFromData, paintingToData, type Painting } from './paint';
 import { createPanel } from './panel';
+import { createStudio, type Climate } from './studio';
 import {
   auToScene, habitableZone, MAX_PLANETS, sceneToAu, STARS, starColor, starSceneRadius, tempBand, temperatureC, yearDays,
   type Air, type PlanetKind, type PlanetSize, type StarKind,
@@ -30,6 +32,8 @@ export interface PlanetState {
   rings: boolean;
   /** 0–3 */
   moons: number;
+  /** a rocky planet painted by hand: its map of kinds of ground (two PNG pictures, paint.ts) */
+  paint?: [string, string];
 }
 export interface State {
   star: StarKind;
@@ -69,6 +73,9 @@ function save() {
   }, 300);
 }
 const state = load();
+/** the painted planets' maps, by planet id */
+const paintings = new Map<number, Painting>();
+for (const p of state.planets) if (p.paint) paintings.set(p.id, paintingFromData(p.paint));
 let selected: number | null = null;
 
 // ---------- renderer, camera, sky ----------
@@ -235,6 +242,8 @@ interface PlanetView {
   mat: THREE.MeshStandardMaterial;
   ring: THREE.Mesh;
   air: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
+  /** the painted look, when the planet has a painting */
+  painted: THREE.ShaderMaterial | null;
   rings: THREE.Mesh;
   moons: THREE.Mesh[];
 }
@@ -319,18 +328,44 @@ function viewOf(p: PlanetState) {
     group.add(air, rings);
     const orbit = new THREE.LineLoop(circle(1), orbitMat);
     scene.add(group, orbit);
-    v = { group, mesh, orbit, mat, ring, air, rings, moons: [] };
+    v = { group, mesh, orbit, mat, ring, air, rings, moons: [], painted: null };
     views.set(p.id, v);
   }
   return v;
 }
 
+/** What the climate does to a painting: seas freeze when cold, dry up when hot or without air; clouds with air like ours. */
+function climate(p: PlanetState): Climate {
+  const c = temperatureC(STARS[state.star], p.au, p);
+  const [r, g, b] = starColor(STARS[state.star].temp);
+  return {
+    cold: THREE.MathUtils.smoothstep(-c, 5, 45),
+    dry: Math.max(THREE.MathUtils.smoothstep(c, 45, 120), p.air === 'none' || p.air === 'thin' ? 0.9 : 0),
+    clouds: p.air === 'earth' ? 0.7 : p.air === 'thick' ? 1 : 0,
+    light: new THREE.Color(r, g, b),
+  };
+}
+
 function refreshPlanet(p: PlanetState) {
   const v = viewOf(p);
-  const file = planetMap(p);
-  if (v.mat.map !== texture(file)) {
-    v.mat.map = texture(file);
-    v.mat.needsUpdate = true;
+  const painting = p.kind === 'rocky' ? paintings.get(p.id) : undefined;
+  if (painting) {
+    if (!v.painted) v.painted = paintedMaterial(painting);
+    const u = v.painted.uniforms, cl = climate(p);
+    u.uA.value = painting.textures[0];
+    u.uB.value = painting.textures[1];
+    u.uCold.value = cl.cold;
+    u.uDry.value = cl.dry;
+    u.uClouds.value = cl.clouds;
+    u.uLightColor.value.copy(cl.light);
+    v.mesh.material = v.painted;
+  } else {
+    v.mesh.material = v.mat;
+    const file = planetMap(p);
+    if (v.mat.map !== texture(file)) {
+      v.mat.map = texture(file);
+      v.mat.needsUpdate = true;
+    }
   }
   const r = planetRadius(p);
   v.mesh.scale.setScalar(r);
@@ -366,6 +401,8 @@ function refreshAll() {
     if (!state.planets.some((p) => p.id === id)) {
       scene.remove(v.group, v.orbit);
       v.mat.dispose();
+      v.painted?.dispose();
+      paintings.delete(id);
       v.air.material.dispose();
       for (const m of v.moons) (m.material as THREE.Material).dispose();
       views.delete(id);
@@ -413,6 +450,21 @@ const panel = createPanel({
     refreshAll();
     save();
   },
+  paint(id) {
+    const p = state.planets.find((x) => x.id === id);
+    if (!p || p.kind !== 'rocky') return;
+    // a first painting starts as the planet is: a water world, or bare desert without water
+    const painting = paintings.get(id) ?? newPainting(p.water ? 'ocean' : 'desert');
+    controls.enabled = false;
+    studio.open(painting, climate(p), () => {
+      paintings.set(id, painting);
+      p.paint = paintingToData(painting);
+      p.water = oceanShare(painting) > 0.02; // painted seas are its water
+      controls.enabled = true;
+      refreshAll();
+      save();
+    });
+  },
   remove(id) {
     state.planets = state.planets.filter((p) => p.id !== id);
     if (selected === id) selected = null;
@@ -429,6 +481,8 @@ const panel = createPanel({
   },
 });
 
+const studio = createStudio(renderer, canvas, sky.group, scene);
+
 // ---------- dragging planets ----------
 const ray = new THREE.Raycaster();
 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -443,6 +497,7 @@ function aim(e: PointerEvent) {
   ray.setFromCamera(ndc, camera);
 }
 canvas.addEventListener('pointerdown', (e) => {
+  if (studio.active()) return; // the painting studio has the canvas
   down = { x: e.clientX, y: e.clientY };
   aim(e);
   // a little generous: small planets are hard to hit with a finger
@@ -513,6 +568,11 @@ let last = performance.now();
 function frame(now: number) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
+  if (studio.active()) {
+    studio.frame(dt);
+    requestAnimationFrame(frame);
+    return;
+  }
   for (const p of state.planets) {
     if (p === dragging) continue;
     const period = THREE.MathUtils.clamp((yearDays(STARS[state.star], p.au) / 365.25) * EARTH_YEAR_S, 2, 600);
@@ -529,6 +589,7 @@ function frame(now: number) {
     }
   }
   starMesh.rotation.y += dt * 0.02;
+  for (const v of views.values()) if (v.painted) v.painted.uniforms.uTime.value = now / 1000;
   followFreeArea();
   controls.update();
   sky.group.position.copy(camera.position);

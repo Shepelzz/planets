@@ -22,6 +22,8 @@ interface Handlers {
   select: (id: number | null) => void;
   update: (id: number, change: Partial<PlanetState>) => void;
   remove: (id: number) => void;
+  /** open the painting studio for this (rocky) planet */
+  paint: (id: number) => void;
   clear: () => void;
 }
 
@@ -161,6 +163,7 @@ export function createPanel(h: Handlers) {
         <div class="tiles">${SIZES.map((z) => `
           <div class="tile${sel.size === z ? ' on' : ''}"><button class="pick" data-size="${z}"><span class="ball size-${z}" style="background:radial-gradient(circle at 35% 35%, #c8ecff, #3a8bd0 45%, #2f7a3e 75%)"></span><span>${L[`size_${z}`]}</span></button>${speaker(`size_${z}`)}</div>`).join('')}
         </div>
+        <button class="paint" data-paint="${sel.id}">🎨 ${L.paint}</button>
         ${choice(L.air, 'air', AIRS.map((a) => [a, L[`air_${a}`]]), sel.air, `air_${sel.air}` as SayKey)}
         ${choice(L.water, 'water', [['yes', L.water_yes], ['no', L.water_no]], sel.water ? 'yes' : 'no', sel.water ? 'water_yes' : 'water_no')}` : ''}
         ${choice(L.rings, 'rings', [['yes', L.rings_yes], ['no', L.rings_no]], sel.rings ? 'yes' : 'no', sel.rings ? 'rings_yes' : 'rings_no')}
@@ -194,6 +197,7 @@ export function createPanel(h: Handlers) {
     else if (d.rings && sel !== null) h.update(sel, { rings: d.rings === 'yes' });
     else if (d.moons && sel !== null) h.update(sel, { moons: Number(d.moons) });
     else if (d.size && sel !== null) h.update(sel, { size: d.size as PlanetSize });
+    else if (d.paint) h.paint(Number(d.paint));
     else if (d.remove) h.remove(Number(d.remove));
     else if (d.clear) h.clear();
   });

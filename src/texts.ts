@@ -67,6 +67,8 @@ export const BUILDER_LABELS = [
   'air', 'air_none', 'air_thin', 'air_earth', 'air_thick', 'water', 'water_yes', 'water_no',
   'rings', 'rings_yes', 'rings_no', 'moons', 'sky', 'sky_black', 'sky_pink', 'sky_blue', 'sky_orange',
   'inside', 'layer_ocean', 'layer_crust', 'layer_mantle', 'layer_iron', 'layer_air', 'layer_ice', 'layer_rock', 'layer_metal',
+  'paint', 'paint_hint', 'paint_draw', 'paint_turn', 'paint_clear', 'paint_done', 'brush_big', 'brush_small',
+  'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
 ] as const;
 export const BUILDER_SAY = [
   'hint', 'zone', 'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
@@ -76,6 +78,7 @@ export const BUILDER_SAY = [
   'life_no_air', 'life_no_water', 'air_none', 'air_thin', 'air_earth', 'air_thick', 'water_yes', 'water_no',
   'rings_yes', 'rings_no', 'moons_none', 'moons_some', 'sky_black', 'sky_pink', 'sky_blue', 'sky_orange',
   'inside_rocky', 'inside_ice', 'inside_gas',
+  'paint_hint', 'paint_climate', 'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
 ] as const;
 export interface BuilderTexts {
   labels: Record<(typeof BUILDER_LABELS)[number], string>;
