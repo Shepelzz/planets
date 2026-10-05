@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { Body } from './bodies';
-import type { BodyId } from './data';
+import { realmOf, type BodyId, type Realm } from './data';
 
 // Moon systems shown only while visiting: a giant's moons (and Mars's) appear when we fly to the
 // planet or one of its moons. While visiting any planet the orbits make room so the neighbours don't
@@ -24,7 +24,7 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
     systemReach.set(p, Math.max(systemReach.get(p) ?? 0, b.info.orbit + b.info.radius));
   }
 
-  const planets = bodies.filter((b) => !b.info.parent && b !== sun && !b.info.comet);
+  const planets = bodies.filter((b) => !b.info.parent && b !== sun && !b.info.comet && !b.info.fixedAt);
   /** How far a planet's always-shown things reach: rings, or moons like the Moon and Charon. */
   const extent = (b: Body) => {
     let e = b.viewRadius;
@@ -95,7 +95,7 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
    * system's orbit lines stay (its planet's orbit and the moons'); the others fade out, and back in
    * the overview.
    */
-  function visibility(focus: Body | null, dt: number) {
+  function visibility(focus: Body | null, dt: number, realm: Realm) {
     const k = 1 - Math.exp(-dt * 4);
     const host = visitedBy(focus);
     const visiting = host?.info.id ?? null;
@@ -103,7 +103,8 @@ export function createSystems(bodies: Body[], lines: Map<string, THREE.LineLoop>
     for (const b of bodies) {
       const p = b.info.parent;
       const mine = (p ?? b.info.id) === visiting;
-      let show = !p || !byId.get(p)!.info.moonsWhenNear || p === visiting;
+      // only the realm we are in (data.ts) is there at all
+      let show = realmOf(b.info) === realm && (!p || !byId.get(p)!.info.moonsWhenNear || p === visiting);
       if (show && reach !== undefined && host && !mine && b !== sun)
         show = b.anchor.position.distanceTo(host.anchor.position) > reach + b.viewRadius;
       b.anchor.visible = show;

@@ -91,7 +91,7 @@ export class CameraDirector {
     if (!this.fillsWidth()) return this.fitDistance(b.viewRadius);
     // the ball itself; glow and atmosphere may spill over the edges, and so may the rings' tips
     // (fitting the whole rings left Saturn's ball small)
-    const r = b.info.rings ? b.viewRadius * 0.72 : b.comet ? b.viewRadius : b.info.radius;
+    const r = b.info.rings ? b.viewRadius * 0.72 : b.comet || b.info.blackHole ? b.viewRadius : b.info.radius;
     const tanH = Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect;
     return r / Math.sin(Math.atan(tanH));
   }
@@ -118,6 +118,22 @@ export class CameraDirector {
     controls.enabled = false;
   }
 
+  /**
+   * A hyperjump's cut: we are in another realm, looking at its middle from afar, nothing in focus (a
+   * flight then takes us in). `from`: where the camera starts, relative to the realm's centre.
+   */
+  jumpCut(from: THREE.Vector3 = OVERVIEW_OFFSET.clone().multiplyScalar(1.6)) {
+    const { camera, controls } = this;
+    this.flight = null;
+    this.focus = null;
+    camera.position.copy(from);
+    camera.up.copy(WORLD_UP);
+    controls.target.set(0, 0, 0);
+    camera.lookAt(controls.target);
+    controls.enabled = true;
+    this.configureLimits();
+  }
+
   /** Once per frame: the flight, riding along, the controls, framing and the near plane. */
   update(rawDt: number) {
     this.updateFlight(Math.min(rawDt, 0.5)); // flights run on wall-clock time even when frames stutter
@@ -136,6 +152,8 @@ export class CameraDirector {
     // a comet (frame: x away from the Sun, y up): from the side and a little ahead, slightly above, so
     // the head is lit and both tails stream across the screen
     if (b.comet) return new THREE.Vector3(-0.3, 0.22, 1).normalize().multiplyScalar(this.arriveDistance(b));
+    // the black hole: almost edge-on to its disk, as in the film
+    if (b.info.blackHole) return new THREE.Vector3(0, 0.07, 1).normalize().multiplyScalar(this.arriveDistance(b));
     const pos = b.anchor.position;
     const toSun = pos.lengthSq() > 0 ? pos.clone().negate().normalize() : new THREE.Vector3(0, 0, 1);
     const up = new THREE.Vector3(0, 1, 0);
@@ -186,7 +204,11 @@ export class CameraDirector {
 
   private configureLimits() {
     const { focus, controls } = this;
-    if (focus) {
+    if (focus?.info.blackHole) {
+      // close enough to see the light bend, never inside the disk's inner edge
+      controls.minDistance = 7;
+      controls.maxDistance = 70;
+    } else if (focus) {
       const r = focus.info.radius;
       controls.minDistance = r * (focus.info.id === 'sun' ? 1.6 : 1.25);
       controls.maxDistance = focus.station

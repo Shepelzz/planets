@@ -186,3 +186,9 @@ services:
       - type: rewrite
         source: /comet/
         destination: /comet.html
+      - type: rewrite
+        source: /sagittarius
+        destination: /sagittarius.html
+      - type: rewrite
+        source: /sagittarius/
+        destination: /sagittarius.html

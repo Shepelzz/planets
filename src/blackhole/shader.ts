@@ -12,11 +12,13 @@ import { SRGB_GLSL } from '../textures';
 // Units: the horizon's radius is 1 (that is what the equation above assumes), so the photon sphere is
 // at r = 1.5 and rays aimed closer than b = 1.5·√3 ≈ 2.6 fall in: that is the shadow's edge.
 
-export const BLACK_HOLE_FRAG = (maxSteps: number) => /* glsl */ `
+/** maxSteps: the ray loop's length (quality); lod: the GPU can pick a texture's mip level itself (WebGL 2, or WebGL 1 with EXT_shader_texture_lod). */
+export const BLACK_HOLE_FRAG = (maxSteps: number, lod = true) => /* glsl */ `
+${lod ? '' : '#define texture2DLodEXT(t, uv, l) texture2D(t, uv)'}
 uniform vec2 uRes;
 uniform vec3 uCamPos;
 uniform mat3 uCamRot;     // camera orientation: right, up, back (columns)
-uniform float uTanHalfFov;
+uniform mat4 uInvProj;    // the camera's inverse projection (field of view, aspect, the view's shift beside the panels)
 uniform float uRoll;      // tilt of the picture (the film's diagonal disk)
 uniform float uTime;
 uniform float uDoppler;   // 0: symmetric, as in the film; 1: the side coming at us brighter and bluer
@@ -131,10 +133,11 @@ vec4 disk(vec3 p, vec3 ray) {
 
 void main() {
   vec2 ndc = (gl_FragCoord.xy / uRes) * 2.0 - 1.0;
-  ndc.x *= uRes.x / uRes.y;
+  vec4 view = uInvProj * vec4(ndc, 1.0, 1.0);
+  vec3 vd = normalize(view.xyz / view.w);
   float cr = cos(uRoll), sr = sin(uRoll);
-  ndc = vec2(cr * ndc.x - sr * ndc.y, sr * ndc.x + cr * ndc.y);
-  vec3 dir = normalize(uCamRot * vec3(ndc * uTanHalfFov, -1.0));
+  vd.xy = vec2(cr * vd.x - sr * vd.y, sr * vd.x + cr * vd.y);
+  vec3 dir = normalize(uCamRot * vd);
   vec3 pos = uCamPos;
   vec3 hv = cross(pos, dir);
   float h2 = dot(hv, hv);

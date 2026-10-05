@@ -40,7 +40,7 @@ const uniforms = {
   uRes: { value: new THREE.Vector2() },
   uCamPos: { value: new THREE.Vector3() },
   uCamRot: { value: new THREE.Matrix3() },
-  uTanHalfFov: { value: 1 },
+  uInvProj: { value: new THREE.Matrix4() },
   uRoll: { value: -0.32 },
   uTime: { value: 0 },
   uDoppler: { value: 0 },
@@ -120,7 +120,7 @@ function frame(now: number) {
   camera.updateMatrixWorld();
   uniforms.uCamPos.value.copy(camera.position);
   uniforms.uCamRot.value.setFromMatrix4(camera.matrixWorld);
-  uniforms.uTanHalfFov.value = Math.tan((camera.fov * Math.PI) / 360);
+  uniforms.uInvProj.value.copy(camera.projectionMatrixInverse);
   if (bloomOn) composer.render();
   else renderer.render(scene, camera);
   frames++;

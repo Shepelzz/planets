@@ -834,6 +834,16 @@ function updateComet(b: Body, time: number, viewer?: THREE.Vector3) {
   parts.veil.material.opacity = (0.4 + 0.6 * act) * (1 - far); // only close up: from afar it would shine through planets
 }
 
+/** The black hole: nothing to draw in the scene (blackhole/view.ts traces it), just a place to fly to. */
+function makeHoleBody(info: BodyInfo, scene: THREE.Scene): Body {
+  const anchor = new THREE.Group();
+  const tilt = new THREE.Group();
+  anchor.add(tilt);
+  scene.add(anchor);
+  // framed by its disk's inner part (the disk runs on past the screen, as in the film)
+  return { info, anchor, tilt, mesh: new THREE.Object3D(), viewRadius: 9, orbitAngle: 0, spinAngle: 0, materials: [], cut: makeCutUniforms() };
+}
+
 export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
   lowDetail = lowEnd;
   sphereGeo = lowEnd ? new THREE.SphereGeometry(1, 72, 48) : new THREE.SphereGeometry(1, 160, 120);
@@ -841,6 +851,7 @@ export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {
     info.id === 'sun' ? makeSun(info, scene)
       : info.station ? makeStationBody(info, scene)
       : info.comet ? makeComet(info, scene)
+      : info.blackHole ? makeHoleBody(info, scene)
       : makePlanet(info, scene));
 }
 
@@ -940,7 +951,8 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
     const i = b.info;
     const parent = i.parent ? byId.get(i.parent)! : null;
     const origin = parent ? parent.anchor.position : tmp.set(0, 0, 0);
-    if (i.comet) cometPosition(i.comet, b.orbitAngle, b.anchor.position);
+    if (i.fixedAt) b.anchor.position.fromArray(i.fixedAt);
+    else if (i.comet) cometPosition(i.comet, b.orbitAngle, b.anchor.position);
     else b.anchor.position.copy(orbitOffset(i, b.orbitAngle, b.anchor.position, b.orbitR ?? i.orbit)).add(origin);
     if (b.comet) updateComet(b, time, viewer);
     if (b.station) flyNoseFirst(b, parent!, viewer);
@@ -953,6 +965,7 @@ export function updateBodies(bodies: Body[], dt: number, time: number, lines: Ma
   }
   for (const b of bodies) {
     b.tilt.updateMatrixWorld(true);
+    if (!b.materials.length) continue; // the black hole: nothing of its own to light
     const u = b.materials[0].uniforms;
     if (u.uRingNormal) u.uRingNormal.value.set(0, 1, 0).applyQuaternion(b.tilt.getWorldQuaternion(new THREE.Quaternion()));
     if (b.clouds) {

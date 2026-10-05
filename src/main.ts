@@ -2,11 +2,12 @@
 import 'pepjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { createHoleView } from './blackhole/view';
 import { createBodies, createOrbitLines, loadRealStation, showDetail, updateBodies, type Body } from './bodies';
 import { CameraDirector } from './camera';
 import { NARRATION, UI } from './content';
 import { Cutaway } from './cutaway';
-import type { BodyId } from './data';
+import { realmOf, type BodyId, type Realm } from './data';
 import { createDevTools } from './devTools';
 import { createLabels, listenForTaps, pickBody } from './labels';
 import { keepPointersOnCanvas } from './pointerFix';
@@ -17,6 +18,7 @@ import { createSystems } from './systems';
 import { loadingManager, setDetailAllowed } from './textures';
 import { renderThumbnails } from './thumbnails';
 import { createUI } from './ui';
+import { createWarp } from './warp';
 import './style.css';
 
 // The app: sets up the scene and ties the parts together — bodies (bodies.ts), the camera
@@ -85,6 +87,16 @@ controls.rotateSpeed = 0.6;
 controls.zoomSpeed = 0.9;
 const director = new CameraDirector(camera, controls, byId);
 
+// ---------- realms ----------
+// Our Solar System, and the centre of the galaxy with its black hole (data.ts). Only the realm we are
+// in is shown; going to the other one is a hyperjump (warp.ts). In the galaxy the black hole view
+// (blackhole/view.ts) draws the whole picture instead of the scene.
+let realm: Realm = 'sol';
+const touch = navigator.maxTouchPoints > 1;
+const hole = createHoleView(renderer, camera, { lowEnd, touch });
+const warp = createWarp(renderer, lowEnd);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
 // ---------- sizing ----------
 // Pixel ratio starts at a sensible level and is lowered automatically if frames are slow (see frame()).
 const maxPixelRatio = Math.min(window.devicePixelRatio || 1, lowEnd ? 1.25 : 2);
@@ -93,7 +105,8 @@ let pixelRatio = maxPixelRatio;
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  renderer.setPixelRatio(pixelRatio);
+  // the black hole is traced per pixel: there its own quality sets how many
+  renderer.setPixelRatio(realm === 'galaxy' ? Math.min(pixelRatio, hole.ratio) : pixelRatio);
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -103,12 +116,32 @@ window.addEventListener('resize', resize);
 resize();
 
 // ---------- going somewhere ----------
+/** Jump to another realm (instant: no effect, for opening a link), then carry on with `then`. */
+function hyperjump(to: Realm, then: () => void, instant = false) {
+  if (warp.active) return;
+  const arrive = () => {
+    realm = to;
+    cutaway.close();
+    // start far out, then fly in: to the black hole along its disk, home to the whole system
+    director.jumpCut(to === 'galaxy' ? new THREE.Vector3(0, 10, 160) : undefined);
+    ui.setRealm(to);
+    resize();
+    then();
+  };
+  if (instant) return arrive();
+  controls.enabled = false; // the camera is ours until we arrive
+  warp.start(arrive, reducedMotion.matches);
+}
+
 /**
- * Fly to a body (null: the whole system): address, card, narration, maps, then the camera.
+ * Fly to a body (null: the whole system of the realm we are in): address, card, narration, maps, then
+ * the camera; a body in the other realm takes a hyperjump there first.
  * card: 'later' — its card slides in when we arrive (chosen from the dock, a link…); 'hidden' — no
  * card (the body was tapped in the scene: tapping it again opens the card).
  */
 function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 'none' = 'push', card: 'later' | 'hidden' = 'later') {
+  if (b && realmOf(b.info) !== realm) return hyperjump(realmOf(b.info), () => flyTo(b, duration, address, card), address === 'replace');
+  if (!b && realm === 'galaxy') b = byId.get('sagittarius')!; // the galaxy's "whole view" is the hole
   showAddress(b ? { id: b.info.id, name: b.info.name } : null, address);
   cutaway.close();
   if (b?.station) loadRealStation(b); // fetch the detailed model while we fly
@@ -118,9 +151,18 @@ function flyTo(b: Body | null, duration?: number, address: 'push' | 'replace' | 
   ui.setSelected(b ? b.info.id : null, card); // before the camera: the panel's place changes the framing
   director.flyTo(b, duration);
 }
+/** Our whole Solar System, jumping home first if we are away. */
+function goHome(address: 'push' | 'replace' | 'none' = 'push') {
+  if (realm !== 'sol') hyperjump('sol', () => flyTo(null, undefined, address), address === 'replace');
+  else flyTo(null, undefined, address);
+}
 director.onArrive = () => ui.revealInfo();
 const bodyFromPath = () => byId.get(pathSegment() as BodyId) ?? null;
-onAddressChange(() => flyTo(bodyFromPath(), undefined, 'none'));
+onAddressChange(() => {
+  const b = bodyFromPath();
+  if (b) flyTo(b, undefined, 'none');
+  else goHome('none');
+});
 
 // ---------- taps and labels ----------
 listenForTaps(canvas, (x, y) => {
@@ -146,6 +188,7 @@ const ui = createUI({
     }
   },
   onOverview: () => flyTo(null),
+  onHome: () => goHome(),
   onTogglePlay: () => {
     playing = !playing;
     ui.setPlaying(playing);
@@ -172,10 +215,11 @@ window.addEventListener('keydown', (e) => {
     ui.setPlaying(playing);
   }
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-    const i = director.focus ? bodies.indexOf(director.focus) : -1;
-    const n = bodies.length;
+    const here = bodies.filter((b) => realmOf(b.info) === realm);
+    const i = director.focus ? here.indexOf(director.focus) : -1;
+    const n = here.length;
     const next = e.key === 'ArrowRight' ? (i + 1) % n : (i - 1 + n) % n;
-    flyTo(bodies[next < 0 ? n - 1 : next]);
+    flyTo(here[next < 0 ? n - 1 : next]);
   }
   if (e.key === 'i' || e.key === 'I' || e.key === 'ш' || e.key === 'Ш') ui.toggleInfo();
   if (e.key === 'l' || e.key === 'L' || e.key === 'д' || e.key === 'Д') ui.toggleLabels();
@@ -217,7 +261,12 @@ function adaptResolution(now: number) {
   fpsWindowStart = now;
   if (!loaded || document.visibilityState !== 'visible') return;
   slowSeconds = fps < 40 ? slowSeconds + 1 : 0;
-  if (slowSeconds >= 2 && pixelRatio > minPixelRatio) {
+  if (slowSeconds < 2) return;
+  // at the black hole its own quality goes down first (glow off, fewer pixels and steps)
+  if (realm === 'galaxy' && hole.degrade()) {
+    slowSeconds = 0;
+    resize();
+  } else if (pixelRatio > minPixelRatio) {
     pixelRatio = Math.max(minPixelRatio, pixelRatio - 0.25);
     slowSeconds = 0;
     resize();
@@ -225,6 +274,13 @@ function adaptResolution(now: number) {
 }
 let simTime = 0;
 let loaded = false;
+
+/** The picture of the realm we are in: on the screen, or into the hyperjump's picture. */
+function draw(target: THREE.WebGLRenderTarget | null) {
+  if (realm === 'galaxy') return hole.render(simTime, target);
+  renderer.setRenderTarget(target);
+  renderer.render(scene, camera);
+}
 
 function frame(now: number) {
   const rawDt = Math.max(0, (now - lastNow) / 1000);
@@ -234,16 +290,18 @@ function frame(now: number) {
   if (playing) simTime += dt;
   systems.spread(director.focus, rawDt > 0.5 ? 0.5 : rawDt);
   updateBodies(bodies, playing ? dt : 0, simTime, lines, camera.position);
-  systems.visibility(director.focus, Math.min(rawDt, 0.1));
+  systems.visibility(director.focus, Math.min(rawDt, 0.1), realm);
+  // the hyperjump widens the view, as if we were thrown forward
+  camera.fov = 45 + 40 * warp.strength;
   director.update(rawDt);
   cutaway.update(Math.min(rawDt, 0.1));
   sky.group.position.copy(camera.position);
   // the wide halo looks like fog up close, so fade it in with distance
   const halo = sunBody.anchor.userData.halo as THREE.Sprite;
   halo.material.opacity = THREE.MathUtils.smoothstep(camera.position.length(), 150, 450);
-  labels.update(director.focus, director.flying);
+  labels.update(director.focus, director.flying || warp.active); // no name tags in a hyperjump
   dev?.beforeRender();
-  renderer.render(scene, camera);
+  warp.frame(rawDt, draw, () => realm !== 'galaxy');
   if (!loaded && texturesReady) {
     loaded = true;
     loaderEl.classList.add('done');

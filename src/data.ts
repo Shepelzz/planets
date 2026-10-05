@@ -4,7 +4,14 @@ export type BodyId =
   | 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars'
   | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto' | 'charon' | 'iss'
   | 'phobos' | 'deimos' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'enceladus' | 'titan' | 'triton'
-  | 'comet';
+  | 'comet' | 'sagittarius';
+
+/**
+ * Where a body lives. Each realm is its own place with its own centre: only one is shown at a time,
+ * and going to another one is a hyperjump (main.ts, warp.ts). 'sol' — our Solar System;
+ * 'galaxy' — the centre of the Milky Way with its black hole.
+ */
+export type Realm = 'sol' | 'galaxy';
 
 export interface Atmosphere {
   color: [number, number, number];
@@ -54,6 +61,12 @@ export interface BodyPhysics {
    * bodies.ts (makeComet).
    */
   comet?: CometOrbit;
+  /** not in our Solar System (default 'sol') */
+  realm?: Realm;
+  /** a black hole: drawn by tracing light round it (blackhole/), not as a mesh */
+  blackHole?: boolean;
+  /** stands still at this spot of its realm instead of orbiting */
+  fixedAt?: [number, number, number];
 }
 
 export interface CometOrbit {
@@ -71,8 +84,9 @@ export interface CometOrbit {
   rush: number;
 }
 
-/** Bodies without a ball to compare with Earth or to cut open: the station and the comet. */
-export const isBall = (b: BodyPhysics) => !b.station && !b.comet;
+/** Bodies without a ball to compare with Earth or to cut open: the station, the comet, the black hole. */
+export const isBall = (b: BodyPhysics) => !b.station && !b.comet && !b.blackHole;
+export const realmOf = (b: BodyPhysics): Realm => b.realm ?? 'sol';
 
 // Earth's year ≈ 150 s on screen; other orbits follow the real period ratios.
 const YEAR = 150;
@@ -407,6 +421,23 @@ export const PHYSICS: BodyPhysics[] = [
     surface: 'comet',
     shape: [1, 0.66, 0.58],
     comet: { perihelion: 195, aphelion: 820, inclination: 24, turn: -25, rush: 0.55 },
+  },
+  {
+    // Sagittarius A*, the black hole at the centre of our galaxy. Its own realm, reached by a
+    // hyperjump. Scene units here are the black hole shader's: horizon radius 1, shadow ≈ 2.6, disk
+    // out to 12 (blackhole/shader.ts).
+    id: 'sagittarius',
+    realm: 'galaxy',
+    blackHole: true,
+    icon: 'radial-gradient(circle at 50% 50%, #000 0%, #000 34%, #fff1d0 40%, #e8a24a 52%, #3a2208 70%, #05070f 100%)',
+    diameterKm: 24_000_000, // the horizon: about 17 times wider than the Sun
+    radius: 2.6, // the shadow: what a tap hits
+    orbit: 0,
+    orbitSeconds: 0,
+    spinSeconds: 0,
+    tilt: 0,
+    startAngle: 0,
+    fixedAt: [0, 0, 0],
   },
 ];
 

@@ -45,6 +45,54 @@ vec3 surface(vec3 p, vec2 uv, out float h, out float spec, out vec3 night) {
   return srgbToLinear(texture2D(uMap, uv).rgb);
 }`;
 
+/** The black hole's icon, after its picture: a black ball in a golden ring, the disk across it. */
+function holeIcon(size: number) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  const m = size / 2;
+  const glow = g.createRadialGradient(m, m, size * 0.16, m, m, size * 0.48);
+  glow.addColorStop(0, 'rgba(255,240,205,1)');
+  glow.addColorStop(0.18, 'rgba(240,180,90,0.9)');
+  glow.addColorStop(0.55, 'rgba(150,85,25,0.35)');
+  glow.addColorStop(1, 'rgba(60,30,8,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, size, size);
+  // the disk, edge-on and tilted
+  g.save();
+  g.translate(m, m);
+  g.rotate(-0.25);
+  const band = g.createLinearGradient(-m, 0, m, 0);
+  band.addColorStop(0, 'rgba(230,160,70,0)');
+  band.addColorStop(0.5, 'rgba(255,235,190,1)');
+  band.addColorStop(1, 'rgba(230,160,70,0)');
+  g.fillStyle = band;
+  g.beginPath();
+  g.ellipse(0, 0, m * 0.98, size * 0.035, 0, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+  // the shadow, with the bright ring round it
+  g.fillStyle = '#000';
+  g.beginPath();
+  g.arc(m, m, size * 0.17, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = 'rgba(255,245,220,0.95)';
+  g.lineWidth = size * 0.018;
+  g.beginPath();
+  g.arc(m, m, size * 0.18, 0, Math.PI * 2);
+  g.stroke();
+  // the front of the disk passes in front of the shadow
+  g.save();
+  g.translate(m, m);
+  g.rotate(-0.25);
+  g.fillStyle = 'rgba(255,225,170,0.9)';
+  g.beginPath();
+  g.ellipse(0, 0, size * 0.2, size * 0.022, 0, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+  return c.toDataURL('image/png');
+}
+
 /** The comet's icon: a glowing head with its tail streaming to the upper right. */
 function cometIcon(size: number) {
   const c = document.createElement('canvas');
@@ -131,8 +179,8 @@ export function renderThumbnails(ids: BodyId[], size = 160): Record<string, stri
   const out: Record<string, string> = {};
   for (const id of ids) {
     const phys = PHYSICS.find((p) => p.id === id)!;
-    if (phys.comet) {
-      out[id] = cometIcon(size);
+    if (phys.comet || phys.blackHole) {
+      out[id] = phys.comet ? cometIcon(size) : holeIcon(size);
       continue;
     }
     const special = phys.station ? stationView : null;
