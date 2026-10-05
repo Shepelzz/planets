@@ -70,6 +70,7 @@ export const BUILDER_LABELS = [
   'paint', 'paint_hint', 'paint_draw', 'paint_turn', 'paint_clear', 'paint_done', 'brush_big', 'brush_small',
   'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
   'stars_count', 'one_star', 'two_stars', 'second_star', 'unstable_zone', 'suns', 'suns_two', 'life_unstable',
+  'awards', 'award_new',
 ] as const;
 export const BUILDER_SAY = [
   'hint', 'zone', 'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
@@ -82,9 +83,16 @@ export const BUILDER_SAY = [
   'paint_hint', 'paint_climate', 'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
   'two_stars', 'unstable_zone', 'suns_two', 'life_unstable',
 ] as const;
+/** «Мої відкриття»: discoveries the child can make in their own system (builder/awards.ts) */
+export const BUILDER_AWARDS = [
+  'first_planet', 'life', 'red_life', 'two_suns', 'rings', 'three_moons', 'gas_giant', 'venus', 'frozen',
+  'short_year', 'long_year', 'painted', 'unstable', 'full',
+] as const;
+export type AwardId = (typeof BUILDER_AWARDS)[number];
 export interface BuilderTexts {
   labels: Record<(typeof BUILDER_LABELS)[number], string>;
   say: Record<(typeof BUILDER_SAY)[number], string>;
+  awards: Record<AwardId, { title: string; say: string }>;
 }
 
 export interface Content {
@@ -169,8 +177,13 @@ export function buildContent(raw: unknown): Content {
   for (const k of UI_KEYS) UI[k] = str(uiRaw, k, 'ui');
   const b = obj(root.builder, 'builder');
   const bl = obj(b.labels, 'builder.labels'), bs = obj(b.say, 'builder.say');
-  const BUILDER = { labels: {}, say: {} } as BuilderTexts;
+  const BUILDER = { labels: {}, say: {}, awards: {} } as BuilderTexts;
   for (const k of BUILDER_LABELS) BUILDER.labels[k] = str(bl, k, 'builder.labels');
   for (const k of BUILDER_SAY) BUILDER.say[k] = str(bs, k, 'builder.say');
+  const ba = obj(b.awards, 'builder.awards');
+  for (const k of BUILDER_AWARDS) {
+    const a = obj(ba[k], `builder.awards.${k}`);
+    BUILDER.awards[k] = { title: str(a, 'title', `builder.awards.${k}`), say: str(a, 'say', `builder.awards.${k}`) };
+  }
   return { BODIES, NARRATION, STRUCTURE, UI, BUILDER };
 }

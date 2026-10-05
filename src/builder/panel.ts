@@ -1,5 +1,7 @@
 import { BUILDER } from '../content';
 import { say } from '../speech';
+import { BUILDER_AWARDS, type AwardId } from '../texts';
+import { AWARD_ICON } from './awards';
 import { defaults, type PlanetState, type State } from './main';
 import {
   gravity, life, MAX_PLANETS, pairStars, skyOf, STARS, starColor, tempBand, temperatureC, unstableWithin, yearDays,
@@ -16,6 +18,7 @@ type SayKey = keyof typeof S;
 
 interface Handlers {
   state: State;
+  awards: { have: Set<AwardId> };
   selected: () => number | null;
   setStar: (k: StarKind) => void;
   /** the second star, or null for one star */
@@ -67,6 +70,23 @@ export function createPanel(h: Handlers) {
   const el = document.getElementById('panel')!;
   document.querySelector('.back')!.textContent = `← ${L.back}`;
   let adding = false;
+  /** the discovery whose card is open under the badges */
+  let shownAward: AwardId | null = null;
+
+  function awardsSection() {
+    const have = h.awards.have;
+    const a = shownAward && have.has(shownAward) ? shownAward : null;
+    return `
+      <section class="awards">
+        <h2>${L.awards} · ${have.size}/${BUILDER_AWARDS.length}</h2>
+        <div class="badges">${BUILDER_AWARDS.map((id) =>
+          have.has(id)
+            ? `<button class="badge${id === a ? ' on' : ''}" data-award="${id}" title="${BUILDER.awards[id].title}">${AWARD_ICON[id]}</button>`
+            : `<span class="badge locked">?</span>`).join('')}
+        </div>
+        ${a ? `<p class="award-detail"><span>${AWARD_ICON[a]}</span><b>${BUILDER.awards[a].title}</b><button class="say" data-award-say="${a}" aria-label="Послухати">${SPEAKER}</button></p>` : ''}
+      </section>`;
+  }
 
   function results(p: PlanetState) {
     const star = pairStars(h.state.star, h.state.star2);
@@ -183,6 +203,7 @@ export function createPanel(h: Handlers) {
         ${inside(sel)}
         <button class="remove" data-remove="${sel.id}">${L.remove}</button>
       </section>` : ''}
+      ${awardsSection()}
       ${st.planets.length ? `<button class="clear" data-clear="1">${L.clear}</button>` : ''}`;
   }
 
@@ -191,6 +212,11 @@ export function createPanel(h: Handlers) {
     if (!t) return;
     const d = t.dataset;
     if (d.say) return void say(S[d.say as SayKey]);
+    if (d.awardSay) return void say(BUILDER.awards[d.awardSay as AwardId].say);
+    if (d.award) {
+      shownAward = shownAward === d.award ? null : (d.award as AwardId);
+      return render();
+    }
     const sel = h.selected();
     if (d.star) h.setStar(d.star as StarKind);
     else if (d.star2) h.setStar2(d.star2 as StarKind);

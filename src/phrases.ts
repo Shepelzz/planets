@@ -26,5 +26,6 @@ export function spokenPhrases({ BODIES, NARRATION, STRUCTURE, BUILDER }: Omit<Co
   }
   for (const b of BODIES) b.facts.forEach((f, i) => add(f, `${b.name}: факт ${i + 1}`));
   for (const [k, t] of Object.entries(BUILDER.say)) add(t, `Моя система: ${k}`);
+  for (const [k, a] of Object.entries(BUILDER.awards)) add(a.say, `Моя система, відкриття: ${k}`);
   return out;
 }

@@ -6,6 +6,7 @@ import { assetUrl } from '../assets';
 import { keepPointersOnCanvas } from '../pointerFix';
 import { createSky } from '../sky';
 import { newPainting, oceanShare, paintedMaterial, paintingFromData, paintingToData, type Painting } from './paint';
+import { createAwards } from './awards';
 import { createPanel } from './panel';
 import { createStudio, type Climate } from './studio';
 import {
@@ -458,12 +459,15 @@ function refreshAll() {
       views.delete(id);
     }
   for (const p of state.planets) refreshPlanet(p);
+  awards.check(state);
   panel.render();
 }
 
-// ---------- the panel ----------
+// ---------- the panel, the discoveries ----------
+const awards = createAwards();
 const panel = createPanel({
   state,
+  awards,
   selected: () => selected,
   setStar(k) {
     state.star = k;
@@ -592,7 +596,10 @@ canvas.addEventListener('pointermove', (e) => {
 });
 const endDrag = (e: PointerEvent) => {
   const tap = down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8;
-  if (dragging) save();
+  if (dragging) {
+    save();
+    if (awards.check(state)) panel.render(); // a planet dragged somewhere new may be a discovery
+  }
   else if (tap && selected !== null) {
     selected = null; // a tap on empty space puts the planet's card away
     refreshAll();
