@@ -34,7 +34,7 @@ const LEVELS = [
   { name: 'висока', ratio: 1, steps: 400, step: 1 },
   { name: 'максимальна', ratio: Math.min(devicePixelRatio, 1.5), steps: 400, step: 1 },
 ];
-let level = lowEnd ? 0 : 2;
+let level = lowEnd ? 0 : 3; // maximum by default; old devices (no WebGL 2, or ?low) start low
 
 const uniforms = {
   uRes: { value: new THREE.Vector2() },
@@ -45,7 +45,7 @@ const uniforms = {
   uTime: { value: 0 },
   uDoppler: { value: 0 },
   uStep: { value: 1 },
-  uRing: { value: 0 },
+  uRing: { value: 1 },
   uSky: { value: sky },
   uStreaks: { value: bakeStreaks(renderer) },
 };
@@ -74,7 +74,7 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.45, 0.7);
 composer.addPass(bloom);
 composer.addPass(new OutputPass()); // linear → screen colour, as a direct render does
-let bloomOn = false;
+let bloomOn = true;
 
 function resize() {
   renderer.setPixelRatio(LEVELS[level].ratio);
