@@ -254,9 +254,9 @@ export default defineConfig({
     // old iPads stay on iOS 12 (Safari 12): lower modern JS syntax and CSS for them
     target: ['es2017', 'safari12'],
     cssTarget: ['safari12'],
-    // the black hole prototype ships too (/blackhole.html), to try it on phones and tablets
+    // pages of their own: the black hole prototype (/blackhole.html), «Моя система» (/builder.html)
     rolldownOptions: {
-      input: { main: 'index.html', blackhole: 'blackhole.html' },
+      input: { main: 'index.html', blackhole: 'blackhole.html', builder: 'builder.html' },
     },
   },
 });

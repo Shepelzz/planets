@@ -57,12 +57,32 @@ export const UI_KEYS = [
 ] as const;
 export type UiTexts = Record<(typeof UI_KEYS)[number], string>;
 
+// «Моя система» (builder.html): labels on screen, and what the voice explains when a speaker is tapped
+export const BUILDER_LABELS = [
+  'title', 'back', 'star', 'planets', 'add_planet', 'full', 'kind', 'size', 'remove', 'clear', 'drag_hint',
+  'year', 'temperature', 'weight', 'life', 'zone',
+  'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
+  'size_small', 'size_medium', 'size_large', 'days', 'years', 'lighter', 'heavier', 'same_weight', 'no_ground',
+  'life_yes', 'life_hot', 'life_cold', 'life_gas',
+] as const;
+export const BUILDER_SAY = [
+  'hint', 'zone', 'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
+  'size_small', 'size_medium', 'size_large', 'year_short', 'year_earth', 'year_long',
+  'temp_scorching', 'temp_hot', 'temp_mild', 'temp_cold', 'temp_frozen',
+  'weight_light', 'weight_earth', 'weight_heavy', 'weight_gas', 'life_yes', 'life_hot', 'life_cold', 'life_gas',
+] as const;
+export interface BuilderTexts {
+  labels: Record<(typeof BUILDER_LABELS)[number], string>;
+  say: Record<(typeof BUILDER_SAY)[number], string>;
+}
+
 export interface Content {
   BODIES: BodyInfo[];
   NARRATION: Record<BodyId, Narration>;
   /** only bodies with layers (structure.ts) */
   STRUCTURE: Partial<Record<BodyId, Structure>>;
   UI: UiTexts;
+  BUILDER: BuilderTexts;
 }
 
 type Obj = Record<string, unknown>;
@@ -136,5 +156,10 @@ export function buildContent(raw: unknown): Content {
   const uiRaw = obj(root.ui, 'ui');
   const UI = {} as UiTexts;
   for (const k of UI_KEYS) UI[k] = str(uiRaw, k, 'ui');
-  return { BODIES, NARRATION, STRUCTURE, UI };
+  const b = obj(root.builder, 'builder');
+  const bl = obj(b.labels, 'builder.labels'), bs = obj(b.say, 'builder.say');
+  const BUILDER = { labels: {}, say: {} } as BuilderTexts;
+  for (const k of BUILDER_LABELS) BUILDER.labels[k] = str(bl, k, 'builder.labels');
+  for (const k of BUILDER_SAY) BUILDER.say[k] = str(bs, k, 'builder.say');
+  return { BODIES, NARRATION, STRUCTURE, UI, BUILDER };
 }

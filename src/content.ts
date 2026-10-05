@@ -4,6 +4,6 @@
 import raw from '../texts.yaml';
 import { buildContent } from './texts.ts';
 
-export const { BODIES, NARRATION, STRUCTURE, UI } = buildContent(raw);
+export const { BODIES, NARRATION, STRUCTURE, UI, BUILDER } = buildContent(raw);
 export { INSIDE_STAT } from './texts.ts';
 export type { BodyInfo, Layer, Narration, Stat, Structure } from './texts.ts';

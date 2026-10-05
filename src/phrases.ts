@@ -5,7 +5,7 @@ import { INSIDE_STAT } from './texts.ts';
  * Every phrase the app can say, most important first (intros and headers before long facts),
  * exactly as it is passed to say(). Used by the voice recording scripts.
  */
-export function spokenPhrases({ BODIES, NARRATION, STRUCTURE }: Omit<Content, 'UI'>): { text: string; what: string }[] {
+export function spokenPhrases({ BODIES, NARRATION, STRUCTURE, BUILDER }: Omit<Content, 'UI'>): { text: string; what: string }[] {
   const out: { text: string; what: string }[] = [];
   const add = (text: string, what: string) => {
     if (!out.some((p) => p.text === text)) out.push({ text, what });
@@ -25,5 +25,6 @@ export function spokenPhrases({ BODIES, NARRATION, STRUCTURE }: Omit<Content, 'U
     if (c) add(c, `${b.name}: порівняння із Землею`);
   }
   for (const b of BODIES) b.facts.forEach((f, i) => add(f, `${b.name}: факт ${i + 1}`));
+  for (const [k, t] of Object.entries(BUILDER.say)) add(t, `Моя система: ${k}`);
   return out;
 }
