@@ -166,3 +166,4 @@ body.painting #studio {
 .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
 .tools .seg { flex: 0 1 auto; }
 .done { margin-left: auto; min-height: 44px; padding: 10px 22px; border-radius: 14px; background: var(--accent); color: #1a1408; font-weight: 800; }
+.zone-dot.bad { background: #ff6a5a; }

@@ -43,6 +43,27 @@ export const STARS: Record<StarKind, Star> = {
   blue: { mass: 10, lum: 5600, temp: 25000, radius: 4.8 },
 };
 
+// ---------- two stars ----------
+// The two stars circle their common centre of mass; the planets circle both (like Tatooine — real ones
+// exist, e.g. Kepler-16b). Their light adds up, so does their mass (for the planets' years). Too close
+// to the pair a planet is pushed and pulled by turns until it is thrown out: closer than about 2.5
+// times the stars' separation (Holman & Wiegert 1999) no orbit lasts. The stars are set apart so that
+// the zone of life lies beyond that: separation = 0.3 × the zone's inner edge.
+
+/** Two stars seen from far away, as one: their light and their mass added up. */
+export function together(a: Star, b: Star | null): Star {
+  if (!b) return a;
+  return { mass: a.mass + b.mass, lum: a.lum + b.lum, temp: a.lum >= b.lum ? a.temp : b.temp, radius: Math.max(a.radius, b.radius) };
+}
+/** the star kinds chosen, as the planets feel them */
+export const pairStars = (a: StarKind, b?: StarKind | null) => together(STARS[a], b ? STARS[b] : null);
+/** distance between the two stars, AU */
+export const separation = (pair: Star) => 0.3 * habitableZone(pair).inner;
+/** inside this distance from the pair (AU) no planet's orbit lasts */
+export const unstableWithin = (pair: Star) => 2.5 * separation(pair);
+/** The stars' own year (how long one circle round each other takes), in Earth days. */
+export const pairYearDays = (pair: Star) => yearDays(pair, separation(pair));
+
 /** The habitable zone, AU. */
 export function habitableZone(s: Star) {
   const r = Math.sqrt(s.lum);
@@ -87,9 +108,13 @@ export function tempBand(c: number): TempBand {
   return 'frozen';
 }
 
-export type LifeVerdict = 'yes' | 'hot' | 'cold' | 'gas' | 'no_air' | 'no_water';
-/** Could life as we know it be there: solid ground, air, liquid water (so not too hot or cold). */
-export function life(p: PlanetMake, c: number): LifeVerdict {
+export type LifeVerdict = 'yes' | 'hot' | 'cold' | 'gas' | 'no_air' | 'no_water' | 'unstable';
+/**
+ * Could life as we know it be there: a lasting orbit, solid ground, air, liquid water (so not too
+ * hot or cold). unstable: the planet is inside the two stars' unstable zone.
+ */
+export function life(p: PlanetMake, c: number, unstable = false): LifeVerdict {
+  if (unstable) return 'unstable';
   if (p.kind !== 'rocky') return 'gas';
   if (p.air === 'none' || p.air === 'thin') return 'no_air';
   if (c > 40) return 'hot';

@@ -69,6 +69,7 @@ export const BUILDER_LABELS = [
   'inside', 'layer_ocean', 'layer_crust', 'layer_mantle', 'layer_iron', 'layer_air', 'layer_ice', 'layer_rock', 'layer_metal',
   'paint', 'paint_hint', 'paint_draw', 'paint_turn', 'paint_clear', 'paint_done', 'brush_big', 'brush_small',
   'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
+  'stars_count', 'one_star', 'two_stars', 'second_star', 'unstable_zone', 'suns', 'suns_two', 'life_unstable',
 ] as const;
 export const BUILDER_SAY = [
   'hint', 'zone', 'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
@@ -79,6 +80,7 @@ export const BUILDER_SAY = [
   'rings_yes', 'rings_no', 'moons_none', 'moons_some', 'sky_black', 'sky_pink', 'sky_blue', 'sky_orange',
   'inside_rocky', 'inside_ice', 'inside_gas',
   'paint_hint', 'paint_climate', 'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
+  'two_stars', 'unstable_zone', 'suns_two', 'life_unstable',
 ] as const;
 export interface BuilderTexts {
   labels: Record<(typeof BUILDER_LABELS)[number], string>;

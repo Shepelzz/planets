@@ -9,7 +9,7 @@ import { newPainting, oceanShare, paintedMaterial, paintingFromData, paintingToD
 import { createPanel } from './panel';
 import { createStudio, type Climate } from './studio';
 import {
-  auToScene, habitableZone, MAX_PLANETS, sceneToAu, STARS, starColor, starSceneRadius, tempBand, temperatureC, yearDays,
+  auToScene, habitableZone, MAX_PLANETS, pairStars, pairYearDays, sceneToAu, separation, unstableWithin, STARS, starColor, starSceneRadius, tempBand, temperatureC, yearDays,
   type Air, type PlanetKind, type PlanetSize, type StarKind,
 } from './physics';
 import './builder.css';
@@ -37,8 +37,15 @@ export interface PlanetState {
 }
 export interface State {
   star: StarKind;
+  /** a second star (the pair circles its centre of mass; planets circle both) */
+  star2?: StarKind | null;
   planets: PlanetState[];
 }
+
+/** The star(s) as the planets feel them: one star, or the pair's light and mass added up. */
+const pairOf = (s: State) => pairStars(s.star, s.star2);
+/** Is this planet inside the pair's unstable zone (no lasting orbit there)? */
+const unstable = (s: State, au: number) => !!s.star2 && au < unstableWithin(pairOf(s));
 const STORE = 'planets.builder.v1';
 
 /** A new planet's make-up, like its kind usually is in our system. */
@@ -110,35 +117,28 @@ function texture(file: string) {
   return t;
 }
 
-// ---------- the star ----------
-const starGroup = new THREE.Group();
-scene.add(starGroup);
-// the photo of the Sun's surface, but only its light and shade: the colour is this star's own
-const starMat = new THREE.ShaderMaterial({
-  uniforms: { uMap: { value: texture('sun.jpg') }, uColor: { value: new THREE.Color() } },
-  vertexShader: /* glsl */ `
-    varying vec2 vUv;
-    varying vec3 vNormal;
-    void main() {
-      vUv = uv;
-      vNormal = normalize(normalMatrix * normal);
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }`,
-  fragmentShader: /* glsl */ `
-    uniform sampler2D uMap;
-    uniform vec3 uColor;
-    varying vec2 vUv;
-    varying vec3 vNormal;
-    void main() {
-      float lum = dot(texture2D(uMap, vUv).rgb, vec3(0.3, 0.59, 0.11));
-      float limb = 0.55 + 0.45 * max(vNormal.z, 0.0); // darker towards the edge, as real stars are
-      vec3 c = uColor * (0.55 + 0.9 * lum) * limb + vec3(0.25) * lum * limb;
-      gl_FragColor = vec4(c, 1.0);
-      #include <colorspace_fragment>
-    }`,
-});
-const starMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), starMat);
-starGroup.add(starMesh);
+// ---------- the star(s) ----------
+// the photo of the Sun's surface, but only its light and shade: the colour is each star's own
+const STAR_VERT = /* glsl */ `
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  void main() {
+    vUv = uv;
+    vNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }`;
+const STAR_FRAG = /* glsl */ `
+  uniform sampler2D uMap;
+  uniform vec3 uColor;
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  void main() {
+    float lum = dot(texture2D(uMap, vUv).rgb, vec3(0.3, 0.59, 0.11));
+    float limb = 0.55 + 0.45 * max(vNormal.z, 0.0); // darker towards the edge, as real stars are
+    vec3 c = uColor * (0.55 + 0.9 * lum) * limb + vec3(0.25) * lum * limb;
+    gl_FragColor = vec4(c, 1.0);
+    #include <colorspace_fragment>
+  }`;
 const glowCanvas = document.createElement('canvas');
 glowCanvas.width = glowCanvas.height = 256;
 {
@@ -153,10 +153,29 @@ glowCanvas.width = glowCanvas.height = 256;
 }
 const glowTex = new THREE.CanvasTexture(glowCanvas);
 glowTex.colorSpace = THREE.SRGBColorSpace;
-const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-starGroup.add(glow);
-const light = new THREE.PointLight(0xffffff, 3, 0, 0);
-scene.add(light);
+const starGeo = new THREE.SphereGeometry(1, 64, 48);
+
+/** A star: its ball, its glow and its light, moving together. */
+function makeStar() {
+  const group = new THREE.Group();
+  const mat = new THREE.ShaderMaterial({ vertexShader: STAR_VERT, fragmentShader: STAR_FRAG, uniforms: { uMap: { value: texture('sun.jpg') }, uColor: { value: new THREE.Color() } } });
+  const mesh = new THREE.Mesh(starGeo, mat);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  const light = new THREE.PointLight(0xffffff, 3, 0, 0);
+  group.add(mesh, glow, light);
+  scene.add(group);
+  return { group, mesh, mat, glow, light, r: 8 };
+}
+const suns = [makeStar(), makeStar()];
+
+/** the unstable zone round a pair of stars: a faint red disc with a red edge */
+const unstableDisc = new THREE.Mesh(new THREE.RingGeometry(0.0001, 1, 128), new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.08, depthWrite: false, side: THREE.DoubleSide }));
+unstableDisc.rotation.x = -Math.PI / 2;
+const unstableEdge = new THREE.LineLoop(circle(1), new THREE.LineBasicMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.6 }));
+scene.add(unstableDisc, unstableEdge);
+/** the pair's turn round each other, radians, and their drawn distance apart */
+let pairAngle = 0;
+let pairSep = 0;
 
 // the habitable zone: a soft green band
 const zoneMat = new THREE.MeshBasicMaterial({ color: 0x4ee08a, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
@@ -178,16 +197,34 @@ function circle(r: number) {
   return new THREE.BufferGeometry().setFromPoints(pts);
 }
 
+/** how far from the middle the star(s) reach, drawn: planets stay outside it */
 let starR = 8;
 function applyStar(frame: boolean) {
-  const s = STARS[state.star];
-  const [r, g, b] = starColor(s.temp);
-  starR = starSceneRadius(s);
-  starMesh.scale.setScalar(starR);
-  starMat.uniforms.uColor.value.setRGB(r, g, b);
-  (glow.material as THREE.SpriteMaterial).color.setRGB(r, g, b);
-  glow.scale.setScalar(starR * 7);
-  light.color.setRGB(r, g, b);
+  const kinds = [state.star, state.star2 ?? null];
+  suns.forEach((sun, i) => {
+    const k = kinds[i];
+    sun.group.visible = !!k;
+    if (!k) return;
+    const [r, g, b] = starColor(STARS[k].temp);
+    sun.r = starSceneRadius(STARS[k]);
+    sun.mesh.scale.setScalar(sun.r);
+    sun.mat.uniforms.uColor.value.setRGB(r, g, b);
+    (sun.glow.material as THREE.SpriteMaterial).color.setRGB(r, g, b);
+    sun.glow.scale.setScalar(sun.r * 7);
+    sun.light.color.setRGB(r, g, b);
+    // two lights add up: each gives its share of the pair's light (kept in a pleasant range)
+    sun.light.intensity = state.star2 ? 3 * Math.min(Math.max(STARS[k].lum / pairOf(state).lum, 0.25), 0.75) * 1.6 : 3;
+  });
+  const s = pairOf(state);
+  pairSep = state.star2 ? auToScene(separation(s)) : 0;
+  starR = state.star2 ? pairSep / 2 + Math.max(suns[0].r, suns[1].r) : suns[0].r;
+  unstableDisc.visible = unstableEdge.visible = !!state.star2;
+  if (state.star2) {
+    const u = auToScene(unstableWithin(s));
+    unstableDisc.scale.setScalar(u);
+    unstableEdge.scale.setScalar(u);
+  }
+  placeStars();
   const hz = habitableZone(s);
   const inner = auToScene(hz.inner), outer = auToScene(hz.outer);
   zone.geometry.dispose();
@@ -195,6 +232,18 @@ function applyStar(frame: boolean) {
   zoneEdges[0].scale.setScalar(inner);
   zoneEdges[1].scale.setScalar(outer);
   if (frame) frameView();
+}
+
+/** The pair circles its centre of mass: the heavier star nearer the middle, on a smaller circle. */
+function placeStars() {
+  if (!state.star2) {
+    suns[0].group.position.set(0, 0, 0);
+    return;
+  }
+  const m1 = STARS[state.star].mass, m2 = STARS[state.star2].mass;
+  const r1 = (pairSep * m2) / (m1 + m2), r2 = (pairSep * m1) / (m1 + m2);
+  suns[0].group.position.set(Math.cos(pairAngle) * r1, 0, Math.sin(pairAngle) * r1);
+  suns[1].group.position.set(-Math.cos(pairAngle) * r2, 0, -Math.sin(pairAngle) * r2);
 }
 
 /** The part of the screen the panel leaves free (the panel is on the right, or a sheet at the bottom). */
@@ -210,7 +259,7 @@ function freeArea() {
 
 /** Look at the whole system (the zone and every planet) from above at a slant, filling the free area. */
 function frameView() {
-  const outer = auToScene(habitableZone(STARS[state.star]).outer);
+  const outer = auToScene(habitableZone(pairOf(state)).outer);
   const far = Math.max(outer, ...state.planets.map((p) => drawnR(p) + planetRadius(p))) * 1.15 + 10;
   const a = freeArea();
   const tanV = Math.tan((camera.fov * Math.PI) / 360);
@@ -251,6 +300,7 @@ const views = new Map<number, PlanetView>();
 const sphere = new THREE.SphereGeometry(1, 64, 48);
 const orbitMat = new THREE.LineBasicMaterial({ color: 0x8fb4ff, transparent: true, opacity: 0.22 });
 const orbitSelMat = new THREE.LineBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.7 });
+const orbitBadMat = new THREE.LineBasicMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.5 });
 const selRingMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
 
 /**
@@ -260,7 +310,7 @@ const selRingMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: t
 function planetMap(p: PlanetState) {
   if (p.kind === 'gas') return 'jupiter.jpg';
   if (p.kind === 'ice') return 'neptune.jpg';
-  const band = tempBand(temperatureC(STARS[state.star], p.au, p));
+  const band = tempBand(temperatureC(pairOf(state), p.au, p));
   if (p.air === 'thick' && band !== 'cold' && band !== 'frozen') return 'venus.jpg'; // the clouds are all one sees
   if (band === 'scorching') return 'mercury.jpg';
   if (band === 'hot') return 'mars.jpg';
@@ -336,8 +386,8 @@ function viewOf(p: PlanetState) {
 
 /** What the climate does to a painting: seas freeze when cold, dry up when hot or without air; clouds with air like ours. */
 function climate(p: PlanetState): Climate {
-  const c = temperatureC(STARS[state.star], p.au, p);
-  const [r, g, b] = starColor(STARS[state.star].temp);
+  const c = temperatureC(pairOf(state), p.au, p);
+  const [r, g, b] = starColor(pairOf(state).temp); // the brighter star's colour
   return {
     cold: THREE.MathUtils.smoothstep(-c, 5, 45),
     dry: Math.max(THREE.MathUtils.smoothstep(c, 45, 120), p.air === 'none' || p.air === 'thin' ? 0.9 : 0),
@@ -390,7 +440,7 @@ function refreshPlanet(p: PlanetState) {
     m.userData.dist = r * (p.rings ? 2.8 : 2) + i * r * 0.8;
   });
   v.ring.visible = p.id === selected;
-  v.orbit.material = p.id === selected ? orbitSelMat : orbitMat;
+  v.orbit.material = p.id === selected ? orbitSelMat : unstable(state, p.au) ? orbitBadMat : orbitMat;
   const d = drawnR(p);
   v.orbit.scale.setScalar(d);
   v.group.position.set(Math.cos(p.angle) * d, 0, Math.sin(p.angle) * d);
@@ -421,9 +471,15 @@ const panel = createPanel({
     refreshAll();
     save();
   },
+  setStar2(k) {
+    state.star2 = k;
+    applyStar(true);
+    refreshAll();
+    save();
+  },
   addPlanet(kind) {
     if (state.planets.length >= MAX_PLANETS) return;
-    const hz = habitableZone(STARS[state.star]);
+    const hz = habitableZone(pairOf(state));
     // rocky ones start in the zone of life; giants farther out, as in our system
     const base = kind === 'rocky' ? (hz.inner + hz.outer) / 2 : hz.outer * (kind === 'gas' ? 3.5 : 9);
     const p: PlanetState = {
@@ -474,6 +530,7 @@ const panel = createPanel({
   clear() {
     state.planets = [];
     state.star = 'sun';
+    state.star2 = null;
     selected = null;
     applyStar(true);
     refreshAll();
@@ -526,7 +583,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (!dragging) return;
   aim(e);
   if (!ray.ray.intersectPlane(plane, hit)) return;
-  const outer = auToScene(habitableZone(STARS[state.star]).outer);
+  const outer = auToScene(habitableZone(pairOf(state)).outer);
   const r = THREE.MathUtils.clamp(Math.hypot(hit.x, hit.z), starR + planetRadius(dragging) + 3, outer * 3.2);
   dragging.au = sceneToAu(r);
   dragging.angle = Math.atan2(hit.z, hit.x);
@@ -575,7 +632,7 @@ function frame(now: number) {
   }
   for (const p of state.planets) {
     if (p === dragging) continue;
-    const period = THREE.MathUtils.clamp((yearDays(STARS[state.star], p.au) / 365.25) * EARTH_YEAR_S, 2, 600);
+    const period = THREE.MathUtils.clamp((yearDays(pairOf(state), p.au) / 365.25) * EARTH_YEAR_S, 2, 600);
     p.angle -= (dt / period) * Math.PI * 2;
     const v = views.get(p.id);
     if (v) {
@@ -588,7 +645,13 @@ function frame(now: number) {
       });
     }
   }
-  starMesh.rotation.y += dt * 0.02;
+  for (const sun of suns) sun.mesh.rotation.y += dt * 0.02;
+  if (state.star2) {
+    // the pair's own year, sped up like the planets' (real ratio to them), at least a second and a half
+    const period = THREE.MathUtils.clamp((pairYearDays(pairOf(state)) / 365.25) * EARTH_YEAR_S, 1.5, 60);
+    pairAngle -= (dt / period) * Math.PI * 2;
+    placeStars();
+  }
   for (const v of views.values()) if (v.painted) v.painted.uniforms.uTime.value = now / 1000;
   followFreeArea();
   controls.update();

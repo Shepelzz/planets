@@ -2,7 +2,7 @@ import { BUILDER } from '../content';
 import { say } from '../speech';
 import { defaults, type PlanetState, type State } from './main';
 import {
-  gravity, life, MAX_PLANETS, skyOf, STARS, starColor, tempBand, temperatureC, yearDays,
+  gravity, life, MAX_PLANETS, pairStars, skyOf, STARS, starColor, tempBand, temperatureC, unstableWithin, yearDays,
   type Air, type PlanetKind, type PlanetSize, type StarKind,
 } from './physics';
 
@@ -18,6 +18,8 @@ interface Handlers {
   state: State;
   selected: () => number | null;
   setStar: (k: StarKind) => void;
+  /** the second star, or null for one star */
+  setStar2: (k: StarKind | null) => void;
   addPlanet: (k: PlanetKind) => void;
   select: (id: number | null) => void;
   update: (id: number, change: Partial<PlanetState>) => void;
@@ -67,7 +69,7 @@ export function createPanel(h: Handlers) {
   let adding = false;
 
   function results(p: PlanetState) {
-    const star = STARS[h.state.star];
+    const star = pairStars(h.state.star, h.state.star2);
     const days = yearDays(star, p.au);
     const year = days < 1000 ? `${Math.round(days)} ${plural(Math.round(days), L.days)}` : `${num(days / 365.25)} ${plural(Math.round(days / 365.25), L.years)}`;
     const yearSay: SayKey = days < 0.7 * 365.25 ? 'year_short' : days > 1.4 * 365.25 ? 'year_long' : 'year_earth';
@@ -83,13 +85,14 @@ export function createPanel(h: Handlers) {
       weight = g < 0.9 ? L.lighter.replace('{n}', num(1 / g)) : g > 1.1 ? L.heavier.replace('{n}', num(g)) : L.same_weight;
       weightSay = g < 0.9 ? 'weight_light' : g > 1.1 ? 'weight_heavy' : 'weight_earth';
     }
-    const v = life(p, c);
+    const v = life(p, c, !!h.state.star2 && p.au < unstableWithin(star));
     const sky = skyOf(p);
     return `
       <dl class="results">
         <div><dt>${L.year}</dt><dd>${year}</dd>${speaker(yearSay)}</div>
         <div><dt>${L.temperature}</dt><dd>${temp}</dd>${speaker(tempSay)}</div>
         <div><dt>${L.weight}</dt><dd>${weight}</dd>${speaker(weightSay)}</div>
+        ${h.state.star2 ? `<div><dt>${L.suns}</dt><dd>${L.suns_two}</dd>${speaker('suns_two')}</div>` : ''}
         ${sky ? `<div><dt>${L.sky}</dt><dd><span class="sky-dot sky-${sky}"></span>${L[`sky_${sky}`]}</dd>${speaker(`sky_${sky}`)}</div>` : ''}
         <div class="life ${v}"><dt>${L.life}</dt><dd>${L[`life_${v}`]}</dd>${speaker(`life_${v}` as SayKey)}</div>
       </dl>`;
@@ -126,7 +129,7 @@ export function createPanel(h: Handlers) {
   function render() {
     const st = h.state;
     const sel = st.planets.find((p) => p.id === h.selected()) ?? null;
-    const band = (p: PlanetState) => (p.kind === 'rocky' ? tempBand(temperatureC(STARS[st.star], p.au, p)) : undefined);
+    const band = (p: PlanetState) => (p.kind === 'rocky' ? tempBand(temperatureC(pairStars(st.star, st.star2), p.au, p)) : undefined);
     const full = st.planets.length >= MAX_PLANETS;
     el.innerHTML = `
       <h1>${L.title}</h1>
@@ -138,7 +141,16 @@ export function createPanel(h: Handlers) {
             <button class="pick" data-star="${k}">${starBall(k)}<span>${L[`star_${k}`]}</span></button>${speaker(`star_${k}`)}
           </div>`).join('')}
         </div>
+        ${choice(L.stars_count, 'count', [['1', L.one_star], ['2', L.two_stars]], st.star2 ? '2' : '1', 'two_stars')}
+        ${st.star2 ? `
+        <h2>${L.second_star}</h2>
+        <div class="tiles">${STAR_KINDS.map((k) => `
+          <div class="tile${st.star2 === k ? ' on' : ''}">
+            <button class="pick" data-star2="${k}">${starBall(k)}<span>${L[`star_${k}`]}</span></button>${speaker(`star_${k}`)}
+          </div>`).join('')}
+        </div>` : ''}
         <p class="legend"><span class="zone-dot"></span>${L.zone}${speaker('zone')}</p>
+        ${st.star2 ? `<p class="legend"><span class="zone-dot bad"></span>${L.unstable_zone}${speaker('unstable_zone')}</p>` : ''}
       </section>
       <section>
         <h2>${L.planets}</h2>
@@ -181,6 +193,8 @@ export function createPanel(h: Handlers) {
     if (d.say) return void say(S[d.say as SayKey]);
     const sel = h.selected();
     if (d.star) h.setStar(d.star as StarKind);
+    else if (d.star2) h.setStar2(d.star2 as StarKind);
+    else if (d.count) h.setStar2(d.count === '2' ? h.state.star2 ?? 'red' : null); // a red dwarf: the most common companion
     else if (d.add) {
       adding = !adding;
       render();
