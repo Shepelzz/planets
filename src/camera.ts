@@ -10,6 +10,12 @@ export const OVERVIEW_OFFSET = new THREE.Vector3(0, 308, 555);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 /** How far from the black hole we stop (its units: the shadow's radius is 2.6). */
 const HOLE_DISTANCE = 17;
+/** The camera's usual view angle (the hyperjump widens it for a moment: framing must not follow). */
+export const FOV = 45;
+/** Part of the free width a visited ball spans. */
+const BALL_WIDTH = 0.8;
+/** The same for moons. */
+const MOON_WIDTH = 0.5;
 
 interface Flight {
   t: number;
@@ -77,7 +83,7 @@ export class CameraDirector {
   /** Distance at which a sphere of radius r fills a comfortable part of the free screen area. */
   fitDistance(r: number) {
     const a = this.freeArea();
-    const tanV = Math.tan((this.camera.fov * Math.PI) / 360);
+    const tanV = Math.tan((FOV * Math.PI) / 360);
     const t = (tanV * Math.min(a.w, a.h)) / window.innerHeight;
     return (r / Math.sin(Math.atan(t))) * 1.18;
   }
@@ -88,14 +94,22 @@ export class CameraDirector {
     return this.portraitTouch.matches && window.innerHeight > window.innerWidth;
   }
 
-  /** How far from a body the camera stops: on upright phones and tablets edge to edge, elsewhere fitDistance. */
+  /**
+   * How far from a body the camera stops. The Sun and planets: the ball spans 80% of the free
+   * area's width (glow and atmosphere may spill further, and so may the rings' tips: fitting the whole
+   * rings left Saturn's ball small); moons 50%. The comet and the station: edge to edge on upright phones and
+   * tablets, elsewhere fitDistance.
+   */
   private arriveDistance(b: Body) {
+    const tanV = Math.tan((FOV * Math.PI) / 360);
+    if (!b.station && !b.comet) {
+      const r = b.info.rings ? b.viewRadius * 0.72 : b.info.radius;
+      const part = b.info.parent ? MOON_WIDTH : BALL_WIDTH;
+      const tanW = (tanV * this.freeArea().w * part) / window.innerHeight;
+      return r / Math.sin(Math.atan(tanW));
+    }
     if (!this.fillsWidth()) return this.fitDistance(b.viewRadius);
-    // the ball itself; glow and atmosphere may spill over the edges, and so may the rings' tips
-    // (fitting the whole rings left Saturn's ball small)
-    const r = b.info.rings ? b.viewRadius * 0.72 : b.comet || b.info.blackHole ? b.viewRadius : b.info.radius;
-    const tanH = Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect;
-    return r / Math.sin(Math.atan(tanH));
+    return b.viewRadius / Math.sin(Math.atan(tanV * this.camera.aspect));
   }
 
   /** Start a flight to a body (null: the overview). The info panel must be set up first: it changes the framing. */

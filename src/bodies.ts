@@ -290,12 +290,42 @@ void main() {
   cutAway(vWorldPos - uCenter);
   vec3 p = normalize(vObjPos);
   float t = uTime * 0.04;
-  // the real map plus a slowly boiling granulation on top
-  float gran = uDetail > 0.5 ? fbm(p * 30.0 + vec3(t, -t, t * 0.7), 3) : 0.0;
+  // The real map, alive: copies of it drift at different speeds (the equator faster, as on the real
+  // Sun), the plasma flows a little, and slow patches cross-fade from one copy to the other, so
+  // bright and dark places rise and fade. Then a slowly boiling granulation on top.
+  float lat = vUv.y * 2.0 - 1.0;
+  float spin = 1.0 - 0.35 * lat * lat;
+  vec2 flow = vec2(snoise(p * 2.2 + vec3(0.0, t * 0.6, 0.0)), snoise(p * 2.2 + vec3(5.2, -t * 0.5, 1.3))) * 0.012;
+  vec2 uvA = vec2(vUv.x + fract(uTime * 0.0035 * spin), vUv.y) + flow;
+  vec2 uvB = vec2(vUv.x + 0.37 - fract(uTime * 0.0022 * spin), 1.0 - vUv.y) - flow;
+  float mixAB = smoothstep(-0.35, 0.35, snoise(p * 1.6 + vec3(t * 0.5, -t * 0.3, t * 0.4)));
+  vec3 mapA = texture2D(uMap, uvA).rgb;
+  vec3 srgb = mix(mapA, texture2D(uMap, uvB).rgb, mixAB * 0.85);
+  vec3 map = srgbToLinear(srgb);
+  // Lava: hot spots that flare up in place, fade, and flare elsewhere. Each blob field lives for one
+  // beat and cross-fades into a new random one, so the patches really appear and vanish instead of
+  // sliding; two sizes on different beats so it never pulses all at once.
+  float b1 = uTime * 0.28;
+  float f1 = smoothstep(0.0, 1.0, fract(b1));
+  float big = mix(snoise(p * 2.6 + floor(b1) * 7.31), snoise(p * 2.6 + (floor(b1) + 1.0) * 7.31), f1);
+  float b2 = uTime * 0.45 + 0.5;
+  float f2 = smoothstep(0.0, 1.0, fract(b2));
+  float small = mix(snoise(p * 7.0 + floor(b2) * 3.17), snoise(p * 7.0 + (floor(b2) + 1.0) * 3.17), f2);
+  float hot = smoothstep(0.05, 0.5, big * 0.7 + small * 0.45);
+  float light = smoothstep(0.35, 0.85, dot(srgb, vec3(0.45, 0.45, 0.1))); // the map's own bright grain
+  map *= 0.72 + hot * (0.55 + 0.9 * light);
+  map = mix(map, map * vec3(1.0, 1.05, 0.85) + vec3(0.25, 0.18, 0.05) * light, hot * 0.5); // hotter: yellow-white
+  float glow = 1.0;
+  float gran = 0.0;
+  if (uDetail > 0.5) {
+    // active regions: brighter and darker patches that swell and fade over a few seconds
+    glow = 1.0 + 0.32 * fbm(p * 3.0 + vec3(-t * 0.8, t * 0.6, t), 2);
+    gran = fbm(p * 30.0 + vec3(t, -t, t * 0.7), 3);
+  }
   vec3 V = normalize(cameraPosition - vWorldPos);
   float mu = max(dot(normalize(vWorldNormal), V), 0.0);
   float limb = 0.3 + 0.7 * pow(mu, 0.55);
-  vec3 col = srgbToLinear(texture2D(uMap, vUv).rgb) * (1.7 + 0.35 * gran);
+  vec3 col = map * glow * (1.7 + 0.35 * gran);
   col = mix(col, vec3(1.0, 0.9, 0.62), pow(mu, 3.0) * 0.3);
   col = mix(vec3(0.85, 0.14, 0.0), col, limb);
   gl_FragColor = vec4(min(col * (0.45 + 0.7 * limb), vec3(1.0)), 1.0);
@@ -323,13 +353,15 @@ function makeSun(info: BodyInfo, scene: THREE.Scene): Body {
   tilt.rotation.z = info.tilt * DEG;
   anchor.add(tilt);
   const cut = makeCutUniforms();
+  const sunMap = loadTexture(TEXTURE_FILES.sun);
+  sunMap.wrapS = THREE.RepeatWrapping; // its copies drift round, across the map's edge
   const mat = new THREE.ShaderMaterial({
     vertexShader: VERT,
     fragmentShader: SUN_FRAG,
     uniforms: {
       uTime: { value: 0 },
       uDetail: { value: lowDetail ? 0 : 1 },
-      uMap: { value: loadTexture(TEXTURE_FILES.sun) },
+      uMap: { value: sunMap },
       uCenter: { value: anchor.position },
       ...cut,
     },

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createHoleView } from './blackhole/view';
 import { createBodies, createOrbitLines, loadRealStation, showDetail, updateBodies, type Body } from './bodies';
-import { CameraDirector } from './camera';
+import { CameraDirector, FOV } from './camera';
 import { NARRATION, UI } from './content';
 import { Cutaway } from './cutaway';
 import { realmOf, type BodyId, type Realm } from './data';
@@ -45,7 +45,7 @@ renderer.toneMappingExposure = 1.0;
 renderer.setClearColor(0x000000);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 40000);
+const camera = new THREE.PerspectiveCamera(FOV, 1, 0.05, 40000);
 
 // ---------- loading screen ----------
 const loaderEl = document.getElementById('loader')!;
@@ -292,7 +292,7 @@ function frame(now: number) {
   updateBodies(bodies, playing ? dt : 0, simTime, lines, camera.position);
   systems.visibility(director.focus, Math.min(rawDt, 0.1), realm);
   // the hyperjump widens the view, as if we were thrown forward
-  camera.fov = 45 + 40 * warp.strength;
+  camera.fov = FOV + 40 * warp.strength;
   director.update(rawDt);
   cutaway.update(Math.min(rawDt, 0.1));
   sky.group.position.copy(camera.position);
