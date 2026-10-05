@@ -237,7 +237,7 @@ updateBodies(bodies, 0, 0, lines);
 
 // dev tools (link-preview cards, icon): only in `npm run dev`, left out of the build
 const dev = import.meta.env.DEV
-  ? createDevTools({ renderer, scene, camera, controls, sky: sky.group, bodies, lines, director, flyTo, hideInfo: () => ui.hideInfo(), resize })
+  ? createDevTools({ renderer, scene, camera, controls, sky: sky.group, bodies, lines, director, flyTo, hideInfo: () => ui.hideInfo(), resize, draw: () => draw(null), busy: () => warp.active })
   : null;
 
 // debug handle

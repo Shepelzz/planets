@@ -22,6 +22,10 @@ export interface DevContext {
   flyTo: (b: Body | null, duration?: number, address?: 'push' | 'replace' | 'none') => void;
   hideInfo: () => void;
   resize: () => void;
+  /** draw the current realm's picture to the screen (the black hole is not a scene: it is traced) */
+  draw: () => void;
+  /** a hyperjump is under way */
+  busy: () => boolean;
 }
 
 export function createDevTools(ctx: DevContext) {
@@ -41,7 +45,8 @@ export function createDevTools(ctx: DevContext) {
     const dir = keep.pos.clone().sub(controls.target).normalize();
     // ringed planets: let the rings run wide, so the ball itself is big enough
     const r = b.info.rings ? b.viewRadius * 0.62 : b.viewRadius;
-    const dist = r / Math.sin(Math.atan(Math.tan((camera.fov * Math.PI) / 360) * fill));
+    // the black hole: close, its disk running off the card
+    const dist = b.info.blackHole ? 15 : r / Math.sin(Math.atan(Math.tan((camera.fov * Math.PI) / 360) * fill));
     camera.position.copy(controls.target).addScaledVector(dir, dist);
     camera.lookAt(controls.target);
     camera.near = Math.max(0.01, (dist - b.viewRadius) * 0.2);
@@ -53,7 +58,9 @@ export function createDevTools(ctx: DevContext) {
     for (const o of bodies) if ((o.info.parent ?? o.info.id) !== home && o.anchor.visible) hidden.push(o.anchor);
     for (const l of lines.values()) if (l.visible) hidden.push(l);
     for (const o of hidden) o.visible = false;
-    renderer.render(scene, camera);
+    camera.updateProjectionMatrix();
+    if (b.info.blackHole) ctx.draw();
+    else renderer.render(scene, camera);
     const png = renderer.domElement.toDataURL('image/png');
     for (const o of hidden) o.visible = true;
     camera.position.copy(keep.pos);
@@ -67,7 +74,7 @@ export function createDevTools(ctx: DevContext) {
 
   /** Called by the frame loop before rendering: takes a requested shot once the camera has arrived. */
   function beforeRender() {
-    if (!pending || !director.focus || director.flying) return;
+    if (!pending || !director.focus || director.flying || ctx.busy()) return;
     const done = pending;
     pending = null;
     done(shot(...size));
@@ -76,7 +83,8 @@ export function createDevTools(ctx: DevContext) {
   async function visit(b: Body) {
     ctx.flyTo(b, 0.01, 'none');
     ctx.hideInfo();
-    for (let i = 0; i < 120 && (director.flying || (b.station && !b.station.real)); i++) await wait(50);
+    await wait(100);
+    for (let i = 0; i < 160 && (ctx.busy() || director.flying || (b.station && !b.station.real)); i++) await wait(50);
     await wait(1500); // orbits make room, moons appear
   }
 
