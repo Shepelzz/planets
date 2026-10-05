@@ -2,6 +2,7 @@ import { BUILDER } from '../content';
 import { say } from '../speech';
 import { BUILDER_AWARDS, type AwardId } from '../texts';
 import { AWARD_ICON } from './awards';
+import type { EventKind } from './events';
 import { defaults, type PlanetState, type State } from './main';
 import {
   gravity, life, MAX_PLANETS, pairStars, skyOf, STARS, starColor, tempBand, temperatureC, unstableWithin, yearDays,
@@ -19,6 +20,15 @@ type SayKey = keyof typeof S;
 interface Handlers {
   state: State;
   awards: { have: Set<AwardId> };
+  /** is another planet's orbit too near this one's? */
+  neighbour: (id: number) => boolean;
+  /** what happened last (its card with «undo»), or null */
+  event: () => EventKind | null;
+  /** something is happening right now (buttons wait) */
+  busy: () => boolean;
+  collide: (id: number) => void;
+  pullMoon: (id: number) => void;
+  undo: () => void;
   selected: () => number | null;
   setStar: (k: StarKind) => void;
   /** the second star, or null for one star */
@@ -106,6 +116,8 @@ export function createPanel(h: Handlers) {
       weightSay = g < 0.9 ? 'weight_light' : g > 1.1 ? 'weight_heavy' : 'weight_earth';
     }
     const v = life(p, c, !!h.state.star2 && p.au < unstableWithin(star));
+    const molten = (p.molten ?? 0) > 0.25;
+    const close = h.neighbour(p.id);
     const sky = skyOf(p);
     return `
       <dl class="results">
@@ -114,7 +126,10 @@ export function createPanel(h: Handlers) {
         <div><dt>${L.weight}</dt><dd>${weight}</dd>${speaker(weightSay)}</div>
         ${h.state.star2 ? `<div><dt>${L.suns}</dt><dd>${L.suns_two}</dd>${speaker('suns_two')}</div>` : ''}
         ${sky ? `<div><dt>${L.sky}</dt><dd><span class="sky-dot sky-${sky}"></span>${L[`sky_${sky}`]}</dd>${speaker(`sky_${sky}`)}</div>` : ''}
-        <div class="life ${v}"><dt>${L.life}</dt><dd>${L[`life_${v}`]}</dd>${speaker(`life_${v}` as SayKey)}</div>
+        ${molten
+          ? `<div class="life molten"><dt>${L.life}</dt><dd>${L.molten}</dd>${speaker('molten')}</div>`
+          : `<div class="life ${v}"><dt>${L.life}</dt><dd>${L[`life_${v}`]}</dd>${speaker(`life_${v}` as SayKey)}</div>`}
+        ${close ? `<div class="warn"><dt>${L.neighbours}</dt><dd>${L.too_close}</dd>${speaker('too_close')}</div>` : ''}
       </dl>`;
   }
 
@@ -154,6 +169,7 @@ export function createPanel(h: Handlers) {
     el.innerHTML = `
       <h1>${L.title}</h1>
       <p class="hint">${L.drag_hint}${speaker('hint')}</p>
+      ${h.event() ? `<div class="event"><b>${L[`ev_${h.event()}` as keyof typeof L]}</b>${speaker(`ev_${h.event()}` as SayKey)}<button class="undo" data-undo="1">↩︎ ${L.undo}</button></div>` : ''}
       <section>
         <h2>${L.star}</h2>
         <div class="tiles">${STAR_KINDS.map((k) => `
@@ -190,6 +206,7 @@ export function createPanel(h: Handlers) {
           <div class="tile${sel.kind === k ? ' on' : ''}"><button class="pick" data-kind="${k}">${planetBall(k, k === 'rocky' ? band({ ...sel, kind: 'rocky' }) : undefined)}<span>${L[`type_${k}`]}</span></button>${speaker(`type_${k}`)}</div>`).join('')}
         </div>
         ${results(sel)}
+        ${h.neighbour(sel.id) ? `<button class="happen" data-collide="${sel.id}"${h.busy() ? ' disabled' : ''}>${L.what_happens}</button>` : ''}
         ${sel.kind === 'rocky' ? `
         <h2>${L.size}</h2>
         <div class="tiles">${SIZES.map((z) => `
@@ -200,6 +217,7 @@ export function createPanel(h: Handlers) {
         ${choice(L.water, 'water', [['yes', L.water_yes], ['no', L.water_no]], sel.water ? 'yes' : 'no', sel.water ? 'water_yes' : 'water_no')}` : ''}
         ${choice(L.rings, 'rings', [['yes', L.rings_yes], ['no', L.rings_no]], sel.rings ? 'yes' : 'no', sel.rings ? 'rings_yes' : 'rings_no')}
         ${choice(L.moons, 'moons', ['0', '1', '2', '3'].map((n) => [n, n]), String(sel.moons), sel.moons ? 'moons_some' : 'moons_none')}
+        ${sel.moons ? `<div class="pull"><button class="happen small" data-pull="${sel.id}"${h.busy() ? ' disabled' : ''}>${L.moon_closer}</button>${speaker('moon_closer')}</div>` : ''}
         ${inside(sel)}
         <button class="remove" data-remove="${sel.id}">${L.remove}</button>
       </section>` : ''}
@@ -238,6 +256,9 @@ export function createPanel(h: Handlers) {
     else if (d.moons && sel !== null) h.update(sel, { moons: Number(d.moons) });
     else if (d.size && sel !== null) h.update(sel, { size: d.size as PlanetSize });
     else if (d.paint) h.paint(Number(d.paint));
+    else if (d.collide) h.collide(Number(d.collide));
+    else if (d.pull) h.pullMoon(Number(d.pull));
+    else if (d.undo) h.undo();
     else if (d.remove) h.remove(Number(d.remove));
     else if (d.clear) h.clear();
   });

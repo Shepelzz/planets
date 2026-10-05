@@ -139,6 +139,7 @@ uniform float uCold;       // 0..1: seas freeze, snow on land
 uniform float uDry;        // 0..1: seas dry up (heat, or no air to hold the water)
 uniform float uClouds;     // 0..1
 uniform float uTime;
+uniform float uMolten;     // 1 just after a collision: a sea of lava, cooling to 0
 varying vec2 vUv;
 varying vec3 vObj;
 varying vec3 vWorld;
@@ -190,6 +191,12 @@ void main() {
   // clouds drifting over (only with air like Earth's)
   float c = smoothstep(0.1, 0.55, fbm(p * 3.0 + vec3(uTime * 0.01, 0.0, uTime * 0.006), 5)) * uClouds;
   col = mix(col, vec3(1.0) * uLightColor * (max(dot(Ng, L), 0.0) * 1.4 + 0.02), c * 0.85);
+  // molten after a collision: glowing lava in the cracks of a dark crust that thickens as it cools
+  if (uMolten > 0.0) {
+    float cracks = ridged(p * 7.0 + 5.0, 3);
+    vec3 lava = vec3(1.5, 0.42, 0.08) * (smoothstep(0.78 - 0.5 * uMolten, 1.0, cracks) + 0.6 * uMolten * uMolten);
+    col = mix(col, col * 0.2 + lava, smoothstep(0.0, 0.15, uMolten));
+  }
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -208,6 +215,7 @@ export function paintedMaterial(p: Painting) {
       uDry: { value: 0 },
       uClouds: { value: 0 },
       uTime: { value: 0 },
+      uMolten: { value: 0 },
     },
     extensions: { derivatives: true },
   });

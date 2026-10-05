@@ -12,6 +12,7 @@ import type { State } from './main';
 export const AWARD_ICON: Record<AwardId, string> = {
   first_planet: '🌑', life: '🌍', red_life: '🔴', two_suns: '🌞', rings: '🪐', three_moons: '🌙', gas_giant: '🟠',
   venus: '🌋', frozen: '❄️', short_year: '⚡', long_year: '⏳', painted: '🎨', unstable: '🌀', full: '✨',
+  collision: '💥', moon_ring: '💫',
 };
 const STORE = 'planets.builder.awards.v1';
 const SPEAKER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -91,9 +92,9 @@ export function createAwards() {
     get have() {
       return have;
     },
-    /** Look at the system as it is now; announce what is new. Returns true if anything was. */
-    check(st: State) {
-      const fresh = [...earnedNow(st)].filter((a) => !have.has(a));
+    /** Look at the system as it is now (plus discoveries made by watching something happen); announce what is new. */
+    check(st: State, seen: AwardId[] = []) {
+      const fresh = [...earnedNow(st), ...seen].filter((a, i, all) => !have.has(a) && all.indexOf(a) === i);
       if (!fresh.length) return false;
       for (const a of fresh) have.add(a);
       try {

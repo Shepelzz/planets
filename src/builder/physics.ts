@@ -149,3 +149,22 @@ export const auToScene = (au: number) => SCALE * Math.pow(au, POWER);
 export const sceneToAu = (r: number) => Math.pow(r / SCALE, 1 / POWER);
 /** the star's drawn radius (not to scale either, or planets would be dots) */
 export const starSceneRadius = (s: Star) => 8 * Math.pow(s.radius, 0.6);
+
+// ---------- neighbours too close, moons too close ----------
+// Two planets on near orbits pull on each other each time they pass, until their paths cross and
+// they collide (or one is flung away). How near is too near is measured in their «mutual Hill radius»
+// — the size of the region where the planets' own pull beats the star's: (m1 + m2) / 3M*, cube root,
+// times their average distance. Orbits spaced closer than about ten of these do not last (Chambers et
+// al. 1996). Masses in Earths: Mars-like 0.1, Earth 1, a super-Earth 5, Neptune-like 17, Jupiter 318.
+
+const EARTH_IN_SUNS = 3.0e-6;
+export function massEarths(p: { kind: PlanetKind; size: PlanetSize }) {
+  if (p.kind === 'gas') return 318;
+  if (p.kind === 'ice') return 17;
+  return { small: 0.1, medium: 1, large: 5 }[p.size];
+}
+/** Are these two planets' orbits too near to last? */
+export function tooClose(pair: Star, a: { kind: PlanetKind; size: PlanetSize; au: number }, b: { kind: PlanetKind; size: PlanetSize; au: number }) {
+  const hill = Math.cbrt(((massEarths(a) + massEarths(b)) * EARTH_IN_SUNS) / (3 * pair.mass)) * ((a.au + b.au) / 2);
+  return Math.abs(a.au - b.au) < 10 * hill;
+}

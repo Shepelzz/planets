@@ -5,12 +5,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { assetUrl } from '../assets';
 import { keepPointersOnCanvas } from '../pointerFix';
 import { createSky } from '../sky';
-import { newPainting, oceanShare, paintedMaterial, paintingFromData, paintingToData, type Painting } from './paint';
+import { dab, newPainting, oceanShare, paintedMaterial, paintingFromData, paintingToData, type Painting } from './paint';
 import { createAwards } from './awards';
+import { createBlast, mergePlanets, type EventKind } from './events';
 import { createPanel } from './panel';
 import { createStudio, type Climate } from './studio';
 import {
-  auToScene, habitableZone, MAX_PLANETS, pairStars, pairYearDays, sceneToAu, separation, unstableWithin, STARS, starColor, starSceneRadius, tempBand, temperatureC, yearDays,
+  auToScene, habitableZone, MAX_PLANETS, tooClose, pairStars, pairYearDays, sceneToAu, separation, unstableWithin, STARS, starColor, starSceneRadius, tempBand, temperatureC, yearDays,
   type Air, type PlanetKind, type PlanetSize, type StarKind,
 } from './physics';
 import './builder.css';
@@ -35,6 +36,8 @@ export interface PlanetState {
   moons: number;
   /** a rocky planet painted by hand: its map of kinds of ground (two PNG pictures, paint.ts) */
   paint?: [string, string];
+  /** 1 just after a collision (molten all over), cooling to 0 */
+  molten?: number;
 }
 export interface State {
   star: StarKind;
@@ -294,6 +297,8 @@ interface PlanetView {
   air: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   /** the painted look, when the planet has a painting */
   painted: THREE.ShaderMaterial | null;
+  /** the Roche limit, shown while a moon is pulled in */
+  roche: THREE.LineLoop;
   rings: THREE.Mesh;
   moons: THREE.Mesh[];
 }
@@ -302,6 +307,20 @@ const sphere = new THREE.SphereGeometry(1, 64, 48);
 const orbitMat = new THREE.LineBasicMaterial({ color: 0x8fb4ff, transparent: true, opacity: 0.22 });
 const orbitSelMat = new THREE.LineBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.7 });
 const orbitBadMat = new THREE.LineBasicMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.5 });
+const orbitWarnMat = new THREE.LineBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.6 });
+
+/** A planet whose orbit is too near this one's to last (physics.ts), or so near they would touch on screen. */
+function neighbourOf(p: PlanetState) {
+  return state.planets.find((q) => q !== p && (tooClose(pairOf(state), p, q) || Math.abs(drawnR(p) - drawnR(q)) < planetRadius(p) + planetRadius(q) + 2)) ?? null;
+}
+
+/** Molten after a collision: glowing lava (painted planets in their shader, others by their material). */
+function showMolten(v: PlanetView, p: PlanetState) {
+  const m = p.molten ?? 0;
+  if (v.painted) v.painted.uniforms.uMolten.value = m;
+  v.mat.emissive.setRGB(1, 0.35, 0.08).multiplyScalar(m * 1.3);
+  v.mat.color.setScalar(1 - 0.7 * m);
+}
 const selRingMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
 
 /**
@@ -379,7 +398,11 @@ function viewOf(p: PlanetState) {
     group.add(air, rings);
     const orbit = new THREE.LineLoop(circle(1), orbitMat);
     scene.add(group, orbit);
-    v = { group, mesh, orbit, mat, ring, air, rings, moons: [], painted: null };
+    const roche = new THREE.LineLoop(circle(1.6), new THREE.LineDashedMaterial({ color: 0xff6a5a, dashSize: 0.12, gapSize: 0.08, transparent: true, opacity: 0.8 }));
+    roche.computeLineDistances();
+    roche.visible = false;
+    group.add(roche);
+    v = { group, mesh, orbit, mat, ring, air, rings, moons: [], painted: null, roche };
     views.set(p.id, v);
   }
   return v;
@@ -428,6 +451,7 @@ function refreshPlanet(p: PlanetState) {
   v.air.scale.setScalar(r);
   v.rings.visible = p.rings;
   v.rings.scale.setScalar(r);
+  v.roche.scale.setScalar(r);
   // moons: little grey worlds at a few planet-widths
   while (v.moons.length < p.moons) {
     const m = new THREE.Mesh(moonGeo, new THREE.MeshStandardMaterial({ map: texture('moon.jpg'), roughness: 1 }));
@@ -441,7 +465,8 @@ function refreshPlanet(p: PlanetState) {
     m.userData.dist = r * (p.rings ? 2.8 : 2) + i * r * 0.8;
   });
   v.ring.visible = p.id === selected;
-  v.orbit.material = p.id === selected ? orbitSelMat : unstable(state, p.au) ? orbitBadMat : orbitMat;
+  v.orbit.material = p.id === selected ? orbitSelMat : unstable(state, p.au) ? orbitBadMat : neighbourOf(p) ? orbitWarnMat : orbitMat;
+  showMolten(v, p);
   const d = drawnR(p);
   v.orbit.scale.setScalar(d);
   v.group.position.set(Math.cos(p.angle) * d, 0, Math.sin(p.angle) * d);
@@ -465,9 +490,135 @@ function refreshAll() {
 
 // ---------- the panel, the discoveries ----------
 const awards = createAwards();
+const blast = createBlast(scene);
+
+// ---------- what happens when worlds meet (events.ts) ----------
+type Happening =
+  | { kind: 'collide'; a: PlanetState; b: PlanetState; t: number; from: [number, number, number, number]; meet: number; meetR: number }
+  | { kind: 'ring'; p: PlanetState; t: number };
+let happening: Happening | null = null;
+/** the last thing that happened (its card in the panel), and the system as it was before it */
+let lastEvent: EventKind | null = null;
+let before: string | null = null;
+const APPROACH = 1.8; // seconds for two planets to come together
+const PULL = 2.4; // seconds for a moon to spiral in
+
+/** where an angle meets another the short way round */
+const towards = (from: number, to: number) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
+
+function collide(id: number) {
+  const a = state.planets.find((p) => p.id === id);
+  const b = a && neighbourOf(a);
+  if (!a || !b || happening) return;
+  before = JSON.stringify(state);
+  const meet = Math.atan2(Math.sin(a.angle) + Math.sin(b.angle), Math.cos(a.angle) + Math.cos(b.angle));
+  happening = { kind: 'collide', a, b, t: 0, from: [towards(meet, a.angle), drawnR(a), towards(meet, b.angle), drawnR(b)], meet, meetR: (drawnR(a) + drawnR(b)) / 2 };
+}
+
+function pullMoon(id: number) {
+  const p = state.planets.find((x) => x.id === id);
+  if (!p || !p.moons || happening) return;
+  before = JSON.stringify(state);
+  happening = { kind: 'ring', p, t: 0 };
+}
+
+/** Back to how the system was before the last event. */
+function undo() {
+  if (!before) return;
+  const s = JSON.parse(before) as State;
+  for (const v of views.values()) {
+    scene.remove(v.group, v.orbit);
+    v.mat.dispose();
+    v.painted?.dispose();
+  }
+  views.clear();
+  paintings.clear();
+  state.star = s.star;
+  state.star2 = s.star2;
+  state.planets = s.planets;
+  for (const p of state.planets) if (p.paint) paintings.set(p.id, paintingFromData(p.paint));
+  before = null;
+  lastEvent = null;
+  applyStar(false);
+  refreshAll();
+  save();
+}
+
+/** One frame of what is happening, if anything; planets in it are placed here, not by their orbits. */
+function happen(dt: number) {
+  const h = happening;
+  if (!h) return;
+  h.t += dt;
+  if (h.kind === 'collide') {
+    const k = Math.min(h.t / APPROACH, 1);
+    const e = k * k * (3 - 2 * k);
+    const place = (p: PlanetState, ang: number, r: number) => views.get(p.id)?.group.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+    place(h.a, h.from[0] + (h.meet - h.from[0]) * e, h.from[1] + (h.meetR - h.from[1]) * e);
+    place(h.b, h.from[2] + (h.meet - h.from[2]) * e, h.from[3] + (h.meetR - h.from[3]) * e);
+    if (k < 1) return;
+    // impact: the two become one (events.ts), a flash and a cloud of debris where they met
+    const { keep, gone, kind } = mergePlanets(h.a, h.b);
+    keep.angle = h.meet;
+    const where = new THREE.Vector3(Math.cos(h.meet) * h.meetR, 0, Math.sin(h.meet) * h.meetR);
+    state.planets = state.planets.filter((p) => p !== gone).map((p) => (p.id === keep.id ? keep : p));
+    const painting = paintings.get(keep.id);
+    if (painting && kind === 'merge') {
+      // the scar of the impact on the painted map: a ring of mountains round a dark basin
+      const at = new THREE.Vector2(Math.random(), 0.35 + Math.random() * 0.3);
+      dab(painting, 'mountains', at, 26);
+      dab(painting, 'desert', at, 13);
+      keep.paint = paintingToData(painting);
+    }
+    blast.boom(where, planetRadius(keep));
+    lastEvent = kind;
+    selected = keep.id;
+    happening = null;
+    refreshAll();
+    if (awards.check(state, ['collision'])) panel.render();
+    save();
+  } else {
+    const v = views.get(h.p.id);
+    const moon = v?.moons[0];
+    if (!v || !moon) {
+      happening = null;
+      return;
+    }
+    // the moon spirals in, stretched by the tides more and more
+    const k = Math.min(h.t / PULL, 1);
+    const r = planetRadius(h.p);
+    moon.userData.phase += dt * (2 + 6 * k);
+    const dist = moon.userData.dist * (1 - k) + r * 1.05 * k;
+    moon.position.set(Math.cos(moon.userData.phase) * dist, 0, Math.sin(moon.userData.phase) * dist);
+    moon.scale.set(r * 0.22 * (1 + 2.5 * k * k), r * 0.22 * (1 - 0.5 * k), r * 0.22 * (1 - 0.5 * k));
+    moon.rotation.y = -moon.userData.phase;
+    v.roche.visible = true;
+    if (k < 1) return;
+    // torn apart: a ring
+    v.roche.visible = false;
+    h.p.moons -= 1;
+    h.p.rings = true;
+    blast.boom(v.group.position.clone().add(moon.position), r * 0.5);
+    lastEvent = 'ring';
+    selected = h.p.id;
+    happening = null;
+    refreshAll();
+    if (awards.check(state, ['moon_ring'])) panel.render();
+    save();
+  }
+}
+
 const panel = createPanel({
   state,
   awards,
+  neighbour: (id) => {
+    const p = state.planets.find((x) => x.id === id);
+    return !!p && !!neighbourOf(p);
+  },
+  event: () => lastEvent,
+  busy: () => !!happening,
+  collide,
+  pullMoon,
+  undo,
   selected: () => selected,
   setStar(k) {
     state.star = k;
@@ -560,6 +711,7 @@ function aim(e: PointerEvent) {
 canvas.addEventListener('pointerdown', (e) => {
   if (studio.active()) return; // the painting studio has the canvas
   down = { x: e.clientX, y: e.clientY };
+  if (happening) return; // let it happen
   aim(e);
   // a little generous: small planets are hard to hit with a finger
   const meshes = [...views.values()].map((v) => v.mesh);
@@ -637,8 +789,24 @@ function frame(now: number) {
     requestAnimationFrame(frame);
     return;
   }
+  happen(dt);
+  blast.frame(dt);
+  const h = happening;
   for (const p of state.planets) {
+    if (p.molten) {
+      // cooling: a crust forms, the glow fades (about a quarter of a minute)
+      const was = p.molten;
+      p.molten = Math.max(0, was - dt / 16);
+      const v = views.get(p.id);
+      if (v) showMolten(v, p);
+      if (was > 0.25 && p.molten <= 0.25) panel.render();
+      if (!p.molten) {
+        delete p.molten;
+        save();
+      }
+    }
     if (p === dragging) continue;
+    if (h?.kind === 'collide' && (p === h.a || p === h.b)) continue; // placed by happen()
     const period = THREE.MathUtils.clamp((yearDays(pairOf(state), p.au) / 365.25) * EARTH_YEAR_S, 2, 600);
     p.angle -= (dt / period) * Math.PI * 2;
     const v = views.get(p.id);
@@ -647,6 +815,7 @@ function frame(now: number) {
       v.group.position.set(Math.cos(p.angle) * d, 0, Math.sin(p.angle) * d);
       v.mesh.rotation.y += dt * 0.3;
       v.moons.forEach((m, i) => {
+        if (h?.kind === 'ring' && h.p === p && i === 0) return; // being pulled in (happen())
         m.userData.phase += dt * (1.2 - i * 0.25);
         m.position.set(Math.cos(m.userData.phase) * m.userData.dist, 0, Math.sin(m.userData.phase) * m.userData.dist);
       });

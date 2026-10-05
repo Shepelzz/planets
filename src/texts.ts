@@ -71,6 +71,7 @@ export const BUILDER_LABELS = [
   'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
   'stars_count', 'one_star', 'two_stars', 'second_star', 'unstable_zone', 'suns', 'suns_two', 'life_unstable',
   'awards', 'award_new',
+  'neighbours', 'too_close', 'what_happens', 'undo', 'moon_closer', 'molten', 'ev_merge', 'ev_swallow', 'ev_giants', 'ev_ring',
 ] as const;
 export const BUILDER_SAY = [
   'hint', 'zone', 'star_red', 'star_sun', 'star_white', 'star_blue', 'type_rocky', 'type_ice', 'type_gas',
@@ -82,11 +83,12 @@ export const BUILDER_SAY = [
   'inside_rocky', 'inside_ice', 'inside_gas',
   'paint_hint', 'paint_climate', 'surf_ocean', 'surf_forest', 'surf_desert', 'surf_mountains', 'surf_ice',
   'two_stars', 'unstable_zone', 'suns_two', 'life_unstable',
+  'too_close', 'moon_closer', 'molten', 'ev_merge', 'ev_swallow', 'ev_giants', 'ev_ring',
 ] as const;
 /** «Мої відкриття»: discoveries the child can make in their own system (builder/awards.ts) */
 export const BUILDER_AWARDS = [
   'first_planet', 'life', 'red_life', 'two_suns', 'rings', 'three_moons', 'gas_giant', 'venus', 'frozen',
-  'short_year', 'long_year', 'painted', 'unstable', 'full',
+  'short_year', 'long_year', 'painted', 'unstable', 'full', 'collision', 'moon_ring',
 ] as const;
 export type AwardId = (typeof BUILDER_AWARDS)[number];
 export interface BuilderTexts {
