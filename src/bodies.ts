@@ -841,7 +841,7 @@ function makeHoleBody(info: BodyInfo, scene: THREE.Scene): Body {
   anchor.add(tilt);
   scene.add(anchor);
   // framed by its disk's inner part (the disk runs on past the screen, as in the film)
-  return { info, anchor, tilt, mesh: new THREE.Object3D(), viewRadius: 9, orbitAngle: 0, spinAngle: 0, materials: [], cut: makeCutUniforms() };
+  return { info, anchor, tilt, mesh: new THREE.Object3D(), viewRadius: 5, orbitAngle: 0, spinAngle: 0, materials: [], cut: makeCutUniforms() };
 }
 
 export function createBodies(scene: THREE.Scene, lowEnd = false): Body[] {

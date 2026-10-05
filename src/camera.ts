@@ -8,6 +8,8 @@ import type { BodyId } from './data';
 
 export const OVERVIEW_OFFSET = new THREE.Vector3(0, 308, 555);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+/** How far from the black hole we stop (its units: the shadow's radius is 2.6). */
+const HOLE_DISTANCE = 17;
 
 interface Flight {
   t: number;
@@ -152,8 +154,9 @@ export class CameraDirector {
     // a comet (frame: x away from the Sun, y up): from the side and a little ahead, slightly above, so
     // the head is lit and both tails stream across the screen
     if (b.comet) return new THREE.Vector3(-0.3, 0.22, 1).normalize().multiplyScalar(this.arriveDistance(b));
-    // the black hole: almost edge-on to its disk, as in the film
-    if (b.info.blackHole) return new THREE.Vector3(0, 0.07, 1).normalize().multiplyScalar(this.arriveDistance(b));
+    // the black hole: almost edge-on to its disk, as in the film, and close: the shadow big, the disk
+    // running off past the edges (fitting it into the space above the card left it a small picture)
+    if (b.info.blackHole) return new THREE.Vector3(0, 0.07, 1).normalize().multiplyScalar(HOLE_DISTANCE);
     const pos = b.anchor.position;
     const toSun = pos.lengthSq() > 0 ? pos.clone().negate().normalize() : new THREE.Vector3(0, 0, 1);
     const up = new THREE.Vector3(0, 1, 0);
